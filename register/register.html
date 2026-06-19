@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIESEC Management System</title>
+<link rel="stylesheet" href="register.css" />
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="nav-brand-dot"></div> <!-- this is just a placeholder for the official aiesec logo -->
+    AIESEC
+  </div>
+  <div class="nav-links">
+    <a id="nav-register" class="active" onclick="showPage('register')">Register</a>
+    <a id="nav-forgot" onclick="showPage('forgot')">Forgot password</a>
+  </div>
+</nav>
+
+<div id="toast"></div>
+
+<div id="page-register" class="page active">
+  <div class="card">
+
+    <div class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-dot"></div>
+        AIESEC
+      </div>
+      <h2>Your workspace,<br>your way.</h2>
+      <p>The AIESEC project management platform for members and admins.</p>
+      <div class="sidebar-footer">AIESEC members only · @aiesec.ph</div>
+    </div>
+
+    <div class="form-area">
+      <h1>Create your account</h1>
+      <div class="subtitle">
+        Use your AIESEC email to get started.
+        <span class="tag">@aiesec.ph email only</span>
+      </div>
+
+      <div class="role-selector">
+        <label class="role-option selected" id="role-admin">
+          <input type="radio" name="role" value="admin" checked />
+          <div class="role-label">
+            <strong>Admin</strong>
+            <span>Manage &amp; oversee</span>
+          </div>
+        </label>
+        <label class="role-option" id="role-member">
+          <input type="radio" name="role" value="member" />
+          <div class="role-label">
+            <strong>Member</strong>
+            <span>Collaborate on tasks</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="row">
+        <div class="field" id="f-fname">
+          <label>FIRST NAME</label>
+          <input type="text" id="reg-fname" placeholder="Alexa" />
+          <span class="err-msg">First name is required.</span>
+        </div>
+        <div class="field" id="f-lname">
+          <label>LAST NAME</label>
+          <input type="text" id="reg-lname" placeholder="Pleyto" />
+          <span class="err-msg">Last name is required.</span>
+        </div>
+      </div>
+
+      <div class="field" id="f-email" style="margin-bottom:16px">
+        <label>AIESEC EMAIL</label>
+        <input type="email" id="reg-email" placeholder="alexa.pleyto@aiesec.ph" />
+        <span class="hint">Must be @aiesec.ph</span>
+        <span class="err-msg" id="email-err">Must be a valid @aiesec.ph address.</span>
+      </div>
+
+      <div class="field" id="f-pw" style="margin-bottom:0">
+        <label>PASSWORD</label>
+        <div class="pw-wrap">
+          <input type="password" id="reg-pw" placeholder="Create a strong password" oninput="checkPw()" />
+          <button type="button" class="pw-toggle" onclick="togglePw('reg-pw',this)">✓</button>
+        </div>
+        <span class="err-msg" id="pw-err">Password must meet all requirements.</span>
+      </div>
+
+      <div class="pw-checks">
+        <div class="pw-check" id="chk-len"><div class="dot"></div> 8+ chars</div>
+        <div class="pw-check" id="chk-up"><div class="dot"></div> Uppercase</div>
+        <div class="pw-check" id="chk-num"><div class="dot"></div> Number</div>
+        <div class="pw-check" id="chk-sym"><div class="dot"></div> Symbol</div>
+      </div>
+
+      <div class="field" id="f-cpw" style="margin-bottom:20px">
+        <label>CONFIRM PASSWORD</label>
+        <div class="pw-wrap">
+          <input type="password" id="reg-cpw" placeholder="Re-enter password" />
+          <button type="button" class="pw-toggle" onclick="togglePw('reg-cpw',this)">✓</button>
+        </div>
+        <span class="err-msg">Passwords do not match.</span>
+      </div>
+
+      <button class="btn-primary" onclick="submitRegister()">Create account</button>
+      <div class="form-footer">Already registered? <a onclick="showPage('login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-secure">
+  <span>AIESEC Management System · 2026</span>
+</footer>
+
+<script src="register.js"></script>
+</body>
+</html>
