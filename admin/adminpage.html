@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIESEC PM Portal - User Management</title>
+    <link rel="stylesheet" href="adminpage.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-app">
+        <nav class="admin-sidebar">
+            <div class="sidebar-top">
+                <div class="sidebar-logo">AIESEC <span style="font-weight: 400; font-size: 14px; color: #666;">PM Admin</span></div>
+                <ul class="sidebar-menu">
+                    <li class="menu-item">
+                        <span class="menu-text">LC Dashboard</span>
+                    </li>
+                    <li class="menu-item active">
+                        <span class="menu-text">Member Management</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="sidebar-bottom">
+                <div class="menu-item" onclick="confirmLogout()" style="cursor: pointer;">
+                    <span class="menu-text" style="color: var(--danger-red); font-weight: 600;">Log Out</span>
+                </div>
+            </div>
+        </nav>
+
+        <main class="admin-main">
+            <header class="admin-header">
+                <div class="header-left">
+                    <div class="header-search">
+                        <input type="text" placeholder="Search members, roles, or portfolios...">
+                        <span class="search-kbd">⌘ F</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="header-actions">
+                        <div style="margin-right: 20px; display: flex; align-items: center; gap: 10px;">
+                            <label for="role-simulator" style="font-size: 12px; font-weight: 600; color: #666;">VIEW AS:</label>
+                            <select id="role-simulator" onchange="applyPermissions(this.value)" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; background: white; outline: none;">
+                                <option value="Admin">Admin (PM)</option>
+                                <option value="Member">Standard Member (TM/TL)</option>
+                            </select>
+                        </div>
+
+                        <div style="font-size: 13px; font-weight: 500; text-align: right; line-height: 1.2;">
+                            <div id="current-user-name">Admin User</div>
+                            <div id="current-user-dept" style="color: #777; font-size: 11px;">Performance Management</div>
+                        </div>
+                        <div class="header-profile">
+                            <div class="profile-avatar"></div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-body">
+                <div class="body-intro">
+                    <div class="intro-left">
+                        <div class="body-date">Saturday, 20th June</div>
+                        <h1 class="body-greeting">LC Member Management.</h1>
+                    </div>
+                    <div class="intro-right">
+                        <div class="intro-actions">
+                            <button class="btn-action secondary" id="broadcast-btn" onclick="alert('Opening Broadcast Modal...')">Broadcast Reminder</button>
+                            <button class="btn-action primary" id="add-member-btn" onclick="alert('Opening Add Member Form...')">+ Add Member</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="body-metrics">
+                    <div class="metric-card">
+                        <div class="metric-data">84</div>
+                        <div class="metric-label">Total Active Members</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-data">91%</div>
+                        <div class="metric-label">Average KPI Achievement</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-data">32</div>
+                        <div class="metric-label">Pending Team Tools</div>
+                    </div>
+                </div>
+
+                <div class="body-content">
+                    <div class="content-table">
+                        <div class="table-header">
+                            <h2 class="table-title">Top Performing Members</h2>
+                            <div class="table-filters">
+                                <div class="filter-dropdown">All Portfolios ▾</div>
+                                <div class="filter-dropdown">All Roles ▾</div>
+                            </div>
+                        </div>
+                        
+                        <div class="table-grid-header">
+                            <div>Member</div>
+                            <div>Portfolio</div>
+                            <div>Role</div>
+                            <div>Performance</div>
+                            <div>Next Deadline (MTT)</div>
+                            <div>Actions</div>
+                        </div>
+
+                        <div class="table-body">
+                            <div class="table-row">
+                                <div class="table-cell member">
+                                    <div class="member-avatar avatar-1"></div>
+                                    <div class="member-info">
+                                        <div class="member-name">Raina Helaga</div>
+                                        <div class="member-subtext">raina.helaga@aiesec.ph</div>
+                                    </div>
+                                </div>
+                                <div class="table-cell dept">
+                                    <div class="dept-main">Front Office</div>
+                                    <div class="member-subtext">Outgoing Exchange (oGX)</div>
+                                </div>
+                                <div class="table-cell role" style="font-weight: 600; color: #037ef3;">LCVP</div>
+                                <div class="table-cell perf">
+                                    <div class="perf-bar-bg"><div class="perf-bar-fill excellent" style="width: 98%;"></div></div>
+                                    <span class="perf-score">98%</span>
+                                </div>
+                                <div class="table-cell deadline">
+                                    <div class="deadline-task">Monthly Team Tool</div>
+                                    <div class="member-subtext start-of-month-date">Loading...</div>
+                                </div>
+                                <div class="table-cell row-actions">
+                                    <button class="btn-icon view-btn" title="View Info">View</button>
+                                    <button class="btn-icon edit-btn admin-only" title="Edit Account">Edit</button>
+                                    <button class="btn-icon delete-btn admin-only" title="Delete Account" onclick="deleteAccount(this)">Delete</button>
+                                </div>
+                            </div>
+
+                            <div class="table-row">
+                                <div class="table-cell member">
+                                    <div class="member-avatar avatar-2"></div>
+                                    <div class="member-info">
+                                        <div class="member-name">Andie Woo</div>
+                                        <div class="member-subtext">andie.woo@aiesec.ph</div>
+                                    </div>
+                                </div>
+                                <div class="table-cell dept">
+                                    <div class="dept-main">Back Office</div>
+                                    <div class="member-subtext">Talent Management (TM)</div>
+                                </div>
+                                <div class="table-cell role" style="font-weight: 500;">Team Leader (TL)</div>
+                                <div class="table-cell perf">
+                                    <div class="perf-bar-bg"><div class="perf-bar-fill excellent" style="width: 96%;"></div></div>
+                                    <span class="perf-score">96%</span>
+                                </div>
+                                <div class="table-cell deadline">
+                                    <div class="deadline-task">Submit Team Tool</div>
+                                    <div class="member-subtext end-of-month-date">Loading...</div>
+                                </div>
+                                <div class="table-cell row-actions">
+                                    <button class="btn-icon view-btn" title="View Info">View</button>
+                                    <button class="btn-icon edit-btn admin-only" title="Edit Account">Edit</button>
+                                    <button class="btn-icon delete-btn admin-only" title="Delete Account" onclick="deleteAccount(this)">Delete</button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-row">
+                                <div class="table-cell member">
+                                    <div class="member-avatar avatar-3"></div>
+                                    <div class="member-info">
+                                        <div class="member-name">Christine Cote</div>
+                                        <div class="member-subtext">christine.cote@aiesec.ph</div>
+                                    </div>
+                                </div>
+                                <div class="table-cell dept">
+                                    <div class="dept-main">Back Office</div>
+                                    <div class="member-subtext">Business Development (BD)</div>
+                                </div>
+                                <div class="table-cell role" style="color: #666;">Team Member (TM)</div>
+                                <div class="table-cell perf">
+                                    <div class="perf-bar-bg"><div class="perf-bar-fill excellent" style="width: 92%;"></div></div>
+                                    <span class="perf-score">92%</span>
+                                </div>
+                                <div class="table-cell deadline">
+                                    <div class="deadline-task">Submit Team Tool</div>
+                                    <div class="member-subtext end-of-month-date">Loading...</div>
+                                </div>
+                                <div class="table-cell row-actions">
+                                    <button class="btn-icon view-btn" title="View Info">View</button>
+                                    <button class="btn-icon edit-btn admin-only" title="Edit Account">Edit</button>
+                                    <button class="btn-icon delete-btn admin-only" title="Delete Account" onclick="deleteAccount(this)">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="content-lower">
+                        <div class="lower-left widget-card">
+                            <h2 class="lower-title">PM Quick Broadcast</h2>
+                            <p class="widget-desc">Send a reminder or announcement to all active LC members.</p>
+                            <textarea class="broadcast-input" placeholder="Type your message here..."></textarea>
+                            <button class="btn-action primary full-width" onclick="alert('Message sent to all members successfully!')">Send to All Members</button>
+                        </div>
+                        <div class="lower-right widget-card">
+                            <h2 class="lower-title">Monthly Team Tool Status</h2>
+                            <ul class="dept-list">
+                                <li>
+                                    <span>Incoming Global Talent (iGT)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #666; font-weight: 400;">8/8</span>
+                                        <span class="status-pill success">Complete</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Incoming Global Volunteer (iGV)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #666; font-weight: 400;">10/12</span>
+                                        <span class="status-pill info">On Track</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Outgoing Exchange (oGX)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #ef4444; font-weight: 600;">9/15</span>
+                                        <span class="status-pill warning">Needs Action</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Marketing (MKT)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #666; font-weight: 400;">5/5</span>
+                                        <span class="status-pill success">Complete</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Business Development (BD)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #666; font-weight: 400;">4/6</span>
+                                        <span class="status-pill info">On Track</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Finance & Legal Administration (FLA)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #666; font-weight: 400;">3/3</span>
+                                        <span class="status-pill success">Complete</span>
+                                    </div>
+                                </li>
+                                <li>
+                                    <span>Talent Management (TM)</span> 
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 12px; color: #ef4444; font-weight: 600;">12/20</span>
+                                        <span class="status-pill warning">Needs Action</span>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="adminpage.js"></script>
+</body>
+</html>
