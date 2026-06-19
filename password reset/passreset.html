@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIESEC Management System</title>
+<link rel="stylesheet" href="passreset.css" />
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="nav-brand-dot"></div>
+    AIESEC
+  </div>
+  <div class="nav-links">
+    <a id="nav-register" onclick="showPage('register')">Register</a>
+    <a id="nav-forgot" class="active" onclick="showPage('forgot')">Forgot password</a>
+  </div>
+</nav>
+
+<div id="toast"></div>
+
+<div id="page-forgot" class="page active">
+  <div class="card">
+
+    <div class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-dot"></div>
+        Mondays
+      </div>
+      <h2>Regain your access quickly.</h2>
+      <p>Secure, self-service password reset for all active AIESEC accounts.</p>
+      <ul>
+        <li>OTP sent to your AIESEC email</li>
+        <li>10-minute code expiry</li>
+        <li>Rate-limited for security</li>
+      </ul>
+      <div class="sidebar-footer">Need help? Contact your admin</div>
+    </div>
+
+    <div class="form-area">
+      <div class="stepper" id="stepper">
+        <div class="step active" id="s1"><div class="step-num">1</div> Email</div>
+        <div class="step-line" id="line-1"></div>
+        <div class="step" id="s2"><div class="step-num">2</div> Verify</div>
+        <div class="step-line" id="line-2"></div>
+        <div class="step" id="s3"><div class="step-num">3</div> New password</div>
+      </div>
+
+      <div id="fp-step1">
+        <h1>Reset your password</h1>
+        <div class="subtitle">Enter your registered AIESEC email address.</div>
+
+        <div class="info-banner">
+          <span class="info-icon">ⓘ</span>
+          Only active accounts can reset passwords. Contact an admin if your account is inactive.
+        </div>
+
+        <div class="field" id="f-rp-email" style="margin-bottom:24px">
+          <label>AIESEC EMAIL</label>
+          <input type="email" id="rp-email" placeholder="alexa.pleyto@aiesec.ph" />
+          <span class="hint">Must be your registered @aiesec.ph address</span>
+          <span class="err-msg">Enter a valid @aiesec.ph email address.</span>
+        </div>
+
+        <button class="btn-primary" onclick="sendOtp()">Send verification code</button>
+        <div class="form-footer">Remembered it? <a onclick="showPage('register')">Back to register</a></div>
+      </div>
+
+      <!-- OTP -->
+      <div id="fp-step2" style="display:none">
+        <h1>Enter verification code</h1>
+        <div class="subtitle">We sent a 6-digit code to <strong id="otp-email-label"></strong></div>
+
+        <div class="info-banner" style="margin-top:16px">
+          <span class="info-icon">⏲</span>
+          This code expires in <strong id="otp-timer">10:00</strong>. Do not share it with anyone.
+        </div>
+
+        <div class="field" id="f-otp" style="margin-bottom:24px">
+          <label>VERIFICATION CODE</label>
+          <input type="text" id="otp-input" placeholder="Enter 6-digit code" maxlength="6" inputmode="numeric" />
+          <span class="hint">Check your AIESEC inbox (and spam folder).</span>
+          <span class="err-msg">Invalid or expired code. Try again.</span>
+        </div>
+
+        <button class="btn-primary" onclick="verifyOtp()">Verify code</button>
+        <div class="form-footer">Didn't receive it? <a onclick="resendOtp()">Resend code</a></div>
+      </div>
+
+      <div id="fp-step3" style="display:none">
+        <h1>Set new password</h1>
+        <div class="subtitle">Choose a strong password for your account.</div>
+
+        <div class="field" id="f-np" style="margin-bottom:0;margin-top:20px">
+          <label>NEW PASSWORD</label>
+          <div class="pw-wrap">
+            <input type="password" id="new-pw" placeholder="Create a strong password" oninput="checkNewPw()" />
+            <button type="button" class="pw-toggle" onclick="togglePw('new-pw',this)">𓁹</button>
+          </div>
+          <span class="err-msg">Password must meet all requirements.</span>
+        </div>
+        <div class="pw-checks">
+          <div class="pw-check" id="nchk-len"><div class="dot"></div> 8+ chars</div>
+          <div class="pw-check" id="nchk-up"><div class="dot"></div> Uppercase</div>
+          <div class="pw-check" id="nchk-num"><div class="dot"></div> Number</div>
+          <div class="pw-check" id="nchk-sym"><div class="dot"></div> Symbol</div>
+        </div>
+
+        <div class="field" id="f-cnp" style="margin-bottom:24px">
+          <label>CONFIRM NEW PASSWORD</label>
+          <div class="pw-wrap">
+            <input type="password" id="confirm-new-pw" placeholder="Re-enter new password" />
+            <button type="button" class="pw-toggle" onclick="togglePw('confirm-new-pw',this)">✓</button>
+          </div>
+          <span class="err-msg">Passwords do not match.</span>
+        </div>
+
+        <button class="btn-primary" onclick="submitNewPw()">Update password</button>
+      </div>
+
+      <div class="success-box" id="fp-success">
+        <div class="success-icon">✓</div>
+        <h2>Password updated!</h2>
+        <p>Your password has been successfully reset. A confirmation has been sent to your AIESEC email. You can now sign in with your new password.</p>
+        <a style="color:var(--brand);font-weight:700;font-size:14px;cursor:pointer;text-decoration:none" onclick="showPage('register')">← Back to sign in</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-secure">
+  <span>AIESEC Management System · 2026</span>
+</footer>
+
+<script src="passreset.js"></script>
+</body>
+</html>
