@@ -1,9 +1,14 @@
 Initial repo for all ITISDEV deliverables
 
-instructions to run:
+# Tech Stack
+- JavaScript
+- TypeScript
+- Next.js
+- SQL  
 
-1. install dependencies
+# Instructions to run
+## Install Needed Dependencies
   - npm install
 
-2. run locally
+## Run the local production build
   - npm run dev
