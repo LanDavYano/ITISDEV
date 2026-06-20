@@ -45,6 +45,7 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/chats/loading.js"
+<<<<<<< HEAD
     ],
     "/documents/page": [
       "static/chunks/webpack.js",
@@ -60,6 +61,8 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/receipts/page.js"
+=======
+>>>>>>> refs/remotes/origin/main
     ]
   }
 }

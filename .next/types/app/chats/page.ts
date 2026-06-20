@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // File: /workspaces/ITISDEV/app/chats/page.tsx
+=======
+// File: C:\Users\Wyn\Documents\GitHub\ITISDEV\app\chats\page.tsx
+>>>>>>> refs/remotes/origin/main
 import * as entry from '../../../../app/chats/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
