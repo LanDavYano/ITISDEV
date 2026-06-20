@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 
 interface Project {
@@ -17,11 +18,15 @@ interface Note {
   completed: boolean
 }
 
+// Public pages render without the dashboard chrome (sidebar/header).
+const PUBLIC_ROUTES = ["/", "/login", "/register"]
+
 export default function ClientLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
   const [projects, setProjects] = useState<Project[]>([
     { id: "1", name: "Event Planning", color: "bg-pink-200" },
     { id: "2", name: "Breakfast Plan", color: "bg-green-200" },
@@ -33,6 +38,11 @@ export default function ClientLayout({
       id: Date.now().toString(),
     }
     setProjects([...projects, newProject])
+  }
+
+  // Landing / auth pages stand on their own — no sidebar or top header.
+  if (PUBLIC_ROUTES.includes(pathname)) {
+    return <>{children}</>
   }
 
   return (

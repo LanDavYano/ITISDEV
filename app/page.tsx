@@ -1,608 +1,306 @@
 "use client"
 
-import { useState } from "react"
-import NotesSection from "@/components/notes-section"
+import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { people } from "@/lib/people"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
-  Share,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  CheckCircle,
-  BarChart3,
-  Calendar,
-  MessageSquare,
-  Plus,
-  MoreHorizontal,
-  Edit3,
+  Globe,
+  Target,
+  Compass,
   Users,
-  Zap,
+  TrendingUp,
+  CheckCircle,
+  ArrowRight,
+  Heart,
 } from "lucide-react"
 
-interface Note {
-  id: string
-  title: string
-  description: string
-  completed: boolean
-}
-
-interface Task {
-  id: number
-  name: string
-  comments: number
-  likes: number
-  assigneeId: string
-  status: string
-  statusColor: string
-}
-
-interface ScheduleItem {
-  title: string
-  time: string
-  attendeeIds: string[]
-}
-
-export default function MyTaskPage() {
-  const [notes, setNotes] = useState<Note[]>([
-    {
-      id: "1",
-      title: "Landing Page For Website",
-      description: "To get started on a landing page, could you provide a bit more detail about its purpose?",
-      completed: false,
-    },
-    {
-      id: "2",
-      title: "Fixing icons with dark backgrounds",
-      description:
-        "Use icons that are easily recognizable and straightforward. Avoid overly complex designs that might confuse users",
-      completed: false,
-    },
-    {
-      id: "3",
-      title: "Discussion regarding userflow improvement",
-      description: "What's the main goal of the landing page? (e.g., lead generation, product)",
-      completed: true,
-    },
-  ])
-
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState("This Week")
-  const [selectedDate, setSelectedDate] = useState(17)
-  const [currentWeekStart, setCurrentWeekStart] = useState(15)
-
-  const [tasks, setTasks] = useState<Task[]>({
-    "This Week": [
-      {
-        id: 1,
-        name: "Help DStudio get more customers",
-        comments: 7,
-        likes: 2,
-        assigneeId: "people_0",
-        status: "In Progress",
-        statusColor: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-      },
-      {
-        id: 2,
-        name: "Plan a trip",
-        comments: 10,
-        likes: 3,
-        assigneeId: "people_1",
-        status: "Pending",
-        statusColor: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
-      },
-      {
-        id: 3,
-        name: "Return a package",
-        comments: 5,
-        likes: 8,
-        assigneeId: "people_2",
-        status: "Completed",
-        statusColor: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      },
-    ],
-    "Last Week": [
-      {
-        id: 4,
-        name: "Design new landing page",
-        comments: 12,
-        likes: 5,
-        assigneeId: "people_3",
-        status: "Completed",
-        statusColor: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      },
-      {
-        id: 5,
-        name: "Update user documentation",
-        comments: 3,
-        likes: 1,
-        assigneeId: "people_4",
-        status: "Completed",
-        statusColor: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      },
-      {
-        id: 6,
-        name: "Fix mobile responsive issues",
-        comments: 8,
-        likes: 4,
-        assigneeId: "people_5",
-        status: "Completed",
-        statusColor: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      },
-    ],
-    "This Month": [
-      {
-        id: 7,
-        name: "Q1 Marketing Campaign",
-        comments: 25,
-        likes: 12,
-        assigneeId: "people_6",
-        status: "In Progress",
-        statusColor: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-      },
-      {
-        id: 8,
-        name: "Database optimization",
-        comments: 15,
-        likes: 7,
-        assigneeId: "people_7",
-        status: "In Progress",
-        statusColor: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-      },
-      {
-        id: 9,
-        name: "User feedback analysis",
-        comments: 18,
-        likes: 9,
-        assigneeId: "people_8",
-        status: "Pending",
-        statusColor: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
-      },
-      {
-        id: 10,
-        name: "Security audit",
-        comments: 6,
-        likes: 3,
-        assigneeId: "people_9",
-        status: "Completed",
-        statusColor: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      },
-    ],
-  })
-
-  const [scheduleData, setScheduleData] = useState<Record<number, ScheduleItem[]>>({
-    15: [
-      {
-        title: "Team Standup",
-        time: "09:00 AM to 09:30 AM",
-        attendeeIds: ["people_0", "people_1"],
-      },
-    ],
-    16: [
-      {
-        title: "Client Review Meeting",
-        time: "02:00 PM to 03:00 PM",
-        attendeeIds: ["people_2", "people_3"],
-      },
-    ],
-    17: [
-      {
-        title: "Kickoff Meeting",
-        time: "01:00 PM to 02:30 PM",
-        attendeeIds: ["people_4", "people_5"],
-      },
-      {
-        title: "Create Wordpress website for event Registration",
-        time: "04:00 PM to 02:30 PM",
-        attendeeIds: ["people_6", "people_7"],
-      },
-      {
-        title: "Create User flow for hotel booking",
-        time: "05:00 PM to 02:30 PM",
-        attendeeIds: ["people_8", "people_9"],
-      },
-    ],
-    18: [
-      {
-        title: "Design Review",
-        time: "10:00 AM to 11:00 AM",
-        attendeeIds: ["people_10"],
-      },
-    ],
-    19: [
-      {
-        title: "Sprint Planning",
-        time: "03:00 PM to 04:30 PM",
-        attendeeIds: ["people_11", "people_12", "people_13"],
-      },
-    ],
-    20: [
-      {
-        title: "Weekly Demo",
-        time: "11:00 AM to 12:00 PM",
-        attendeeIds: ["people_14", "people_15"],
-      },
-    ],
-    21: [],
-  })
-
-  const handleAddNote = (note: Omit<Note, "id">) => {
-    const newNote = {
-      ...note,
-      id: Date.now().toString(),
-    }
-    setNotes([...notes, newNote])
-  }
-
-  const handleUpdateNote = (id: string, updates: Partial<Note>) => {
-    setNotes(notes.map((note) => (note.id === id ? { ...note, ...updates } : note)))
-  }
-
-  const handleDeleteNote = (id: string) => {
-    setNotes(notes.filter((note) => note.id !== id))
-  }
-
-  const handleChangeAssignee = (taskId: number, newAssigneeId: string) => {
-    setTasks((prevTasks) => ({
-      ...prevTasks,
-      [selectedTimePeriod]: prevTasks[selectedTimePeriod].map((task) =>
-        task.id === taskId ? { ...task, assigneeId: newAssigneeId } : task,
-      ),
-    }))
-  }
-
-  const handleChangeScheduleAttendees = (date: number, itemIndex: number, newAttendeeIds: string[]) => {
-    setScheduleData((prevData) => ({
-      ...prevData,
-      [date]: prevData[date].map((item, index) =>
-        index === itemIndex ? { ...item, attendeeIds: newAttendeeIds } : item,
-      ),
-    }))
-  }
-
-  const getCurrentWeekDays = () => {
-    const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
-    return days.map((day, index) => ({
-      day,
-      date: currentWeekStart + index,
-    }))
-  }
-
-  const navigateWeek = (direction: "prev" | "next") => {
-    setCurrentWeekStart((prev) => (direction === "next" ? prev + 7 : prev - 7))
-  }
-
-  const currentTasks = tasks[selectedTimePeriod as keyof typeof tasks] || []
-  const currentScheduleItems = scheduleData[selectedDate] || []
-
+export default function LandingPage() {
   return (
-    <div className="p-6">
-      {/* Welcome Section */}
-      <div className="mb-6">
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Thursday, 20th February</p>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Good Evening! John,</h2>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+      {/* ===== Top Navigation ===== */}
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold">
+              A
+            </div>
+            <span
+              className="text-2xl font-bold tracking-tight"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              AIESEC
+            </span>
+            <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400 ml-1">
+              in DLSU-Manila
+            </span>
+          </div>
 
-        <div className="flex items-center space-x-6 mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
+          {/* Login / Register in the upper corner */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            <Link href="/login">
+              <Button
+                variant="ghost"
+                className="text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Login
+              </Button>
+            </Link>
+            <Link href="/register">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                Register
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ===== Hero ===== */}
+      <section className="max-w-7xl mx-auto px-6 pt-16 pb-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-semibold mb-6">
+              <Globe className="w-3.5 h-3.5" />
+              Global platform · Run by youth, for youth
+            </span>
+            <h1
+              className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Develop the leader in you.
+            </h1>
+            <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-xl">
+              The Performance Management System of AIESEC in DLSU-Manila — track
+              goals, measure impact, and grow passionate, competent Filipino
+              leaders from our corner of Taft Avenue.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href="/register">
+                <Button
+                  size="lg"
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+                >
+                  Get Started
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-gray-300 dark:border-gray-700 bg-transparent"
+                >
+                  Member Login
+                </Button>
+              </Link>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+              AIESEC members only · @aiesec.ph email required
+            </p>
+          </div>
+
+          <div className="relative">
+            <div className="absolute -inset-4 bg-blue-600/10 rounded-[2rem] blur-2xl" />
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl ring-1 ring-gray-200 dark:ring-gray-800">
+              <Image
+                src="/aiesec-hero.jpg"
+                alt="AIESEC in DLSU-Manila members"
+                width={1200}
+                height={800}
+                className="w-full h-[420px] object-cover"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Stat strip */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
+          {[
+            { icon: Globe, label: "Countries & territories", value: "150+" },
+            { icon: Users, label: "Active members worldwide", value: "30,000+" },
+            { icon: TrendingUp, label: "Years of impact", value: "75+" },
+            { icon: CheckCircle, label: "UN ECOSOC", value: "Consultative" },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 text-center"
+            >
+              <s.icon className="w-5 h-5 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+              <div className="text-2xl font-bold">{s.value}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== Who we are ===== */}
+      <section className="bg-white dark:bg-gray-800/40 border-y border-gray-200 dark:border-gray-800">
+        <div className="max-w-5xl mx-auto px-6 py-20 text-center">
+          <h2
+            className="text-3xl sm:text-4xl font-bold mb-6"
+            style={{ fontFamily: "'Playfair Display', serif" }}
           >
-            <Share className="w-4 h-4 mr-2" />
-            Share
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 bg-transparent"
+            Who we are
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+            AIESEC is a global platform, non-governmental and not-for-profit
+            organization entirely run by youth for youth. It is in consultative
+            status with the United Nations Economic and Social Council (ECOSOC),
+            empowering young people to discover and develop their leadership
+            potential.
+          </p>
+        </div>
+      </section>
+
+      {/* ===== Vision & Mission ===== */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-8 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mb-5">
+              <Compass className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="text-xl font-bold mb-3">Our Vision</h3>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+              To achieve peace and fulfillment of humankind&apos;s potential.
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-8 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mb-5">
+              <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="text-xl font-bold mb-3">Our Mission</h3>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+              To develop the leadership potential of young people through
+              experiential learning, cross-cultural volunteer exchanges, and
+              international internships.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Gallery ===== */}
+      <section className="max-w-7xl mx-auto px-6 pb-20">
+        <div className="text-center mb-10">
+          <h2
+            className="text-3xl sm:text-4xl font-bold mb-3"
+            style={{ fontFamily: "'Playfair Display', serif" }}
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Task
-          </Button>
+            One local committee, one family
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300">
+            Moments from AIESEC in DLSU-Manila.
+          </p>
         </div>
-
-        {/* Stats */}
-        <div className="flex items-center space-x-8 mb-8">
-          <div className="flex items-center">
-            <Clock className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-            <span className="font-semibold text-gray-900 dark:text-white">12hrs</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">Time Saved</span>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="col-span-2 lg:col-span-1 row-span-2 rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+            <Image
+              src="/aiesec-night.jpg"
+              alt="AIESEC members at night"
+              width={600}
+              height={800}
+              className="w-full h-full object-cover min-h-[300px]"
+            />
           </div>
-          <div className="flex items-center">
-            <CheckCircle className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-            <span className="font-semibold text-gray-900 dark:text-white">24</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">Projects Completed</span>
+          <div className="col-span-2 lg:col-span-2 rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+            <Image
+              src="/aiesec-classroom.jpg"
+              alt="AIESEC general assembly"
+              width={1280}
+              height={720}
+              className="w-full h-full object-cover min-h-[180px]"
+            />
           </div>
-          <div className="flex items-center">
-            <Zap className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-            <span className="font-semibold text-gray-900 dark:text-white">7</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">Projects In-progress</span>
+          <div className="rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+            <Image
+              src="/aiesec-wpose.jpg"
+              alt="AIESEC team bonding"
+              width={1280}
+              height={720}
+              className="w-full h-full object-cover min-h-[180px]"
+            />
+          </div>
+          <div className="rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+            <Image
+              src="/aiesec-hero.jpg"
+              alt="AIESEC delegates"
+              width={1280}
+              height={720}
+              className="w-full h-full object-cover min-h-[180px]"
+            />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-y-6">
-        {/* My Projects - Full Width */}
-        <div className="lg:col-span-3">
-          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                  <BarChart3 className="w-5 h-5 mr-2" />
-                  My Projects
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-transparent"
-                      >
-                        {selectedTimePeriod}
-                        <ChevronDown className="w-4 h-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                      <DropdownMenuItem
-                        onClick={() => setSelectedTimePeriod("This Week")}
-                        className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        This Week
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setSelectedTimePeriod("Last Week")}
-                        className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        Last Week
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setSelectedTimePeriod("This Month")}
-                        className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        This Month
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button variant="ghost" size="sm" className="text-gray-600 dark:text-gray-300">
-                    See All
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Table Header */}
-                <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
-                  <div className="col-span-6 flex items-center">
-                    <Edit3 className="w-4 h-4 mr-2" />
-                    Task Name
-                  </div>
-                  <div className="col-span-3 flex items-center">
-                    <Users className="w-4 h-4 mr-2" />
-                    Assign
-                  </div>
-                  <div className="col-span-3 flex items-center">
-                    <Zap className="w-4 h-4 mr-2" />
-                    Status
-                  </div>
-                </div>
-
-                {/* Task Rows */}
-                {currentTasks.map((task) => {
-                  const assignee = people.find((p) => p.id === task.assigneeId) || people[0]
-                  return (
-                    <div
-                      key={task.id}
-                      className="grid grid-cols-12 gap-4 items-center py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                    >
-                      <div className="col-span-6">
-                        <div className="flex items-center">
-                          <CheckCircle className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{task.name}</span>
-                          <div className="flex items-center ml-4 space-x-2">
-                            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                              <MessageSquare className="w-3 h-3 mr-1" />
-                              {task.comments}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                              ♥ {task.likes}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-span-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <div className="flex items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 rounded p-1">
-                              <Avatar className="w-6 h-6 mr-2">
-                                <AvatarImage src={assignee.imageURL || "/placeholder.svg"} />
-                                <AvatarFallback className="bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white">
-                                  {assignee.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm text-gray-700 dark:text-gray-300">{assignee.name}</span>
-                              <ChevronDown className="w-3 h-3 ml-1" />
-                            </div>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                            {people.map((person) => (
-                              <DropdownMenuItem
-                                key={person.id}
-                                onClick={() => handleChangeAssignee(task.id, person.id)}
-                                className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                              >
-                                <Avatar className="w-5 h-5 mr-2">
-                                  <AvatarImage src={person.imageURL || "/placeholder.svg"} />
-                                  <AvatarFallback className="bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white">
-                                    {person.name
-                                      .split(" ")
-                                      .map((n) => n[0])
-                                      .join("")}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex flex-col">
-                                  <span className="text-sm">{person.name}</span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">{person.email}</span>
-                                </div>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <div className="col-span-3">
-                        <Badge className={task.statusColor}>{task.status}</Badge>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
+      {/* ===== History ===== */}
+      <section className="bg-blue-600 text-white">
+        <div className="max-w-5xl mx-auto px-6 py-20 text-center">
+          <Heart className="w-8 h-8 mx-auto mb-5 opacity-90" />
+          <h2
+            className="text-3xl sm:text-4xl font-bold mb-6"
+            style={{ fontFamily: "'Playfair Display', serif" }}
+          >
+            Our History
+          </h2>
+          <p className="text-lg text-blue-50 leading-relaxed max-w-3xl mx-auto">
+            AIESEC in DLSU-Manila was founded — developing passionate and
+            competent Filipino leaders for future generations from our corner of
+            Taft Avenue.
+          </p>
         </div>
+      </section>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Schedule */}
-          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                  <Calendar className="w-5 h-5 mr-2" />
-                  Schedule
-                </CardTitle>
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Calendar Week View with Navigation */}
-              <div className="flex items-center justify-between mb-4">
-                <Button variant="ghost" size="icon" onClick={() => navigateWeek("prev")}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="grid grid-cols-7 gap-1 text-center text-xs flex-1 mx-2">
-                  {getCurrentWeekDays().map(({ day, date }, index) => (
-                    <div key={day} className="py-2">
-                      <div className="text-gray-500 dark:text-gray-400">{day}</div>
-                      <button
-                        onClick={() => setSelectedDate(date)}
-                        className={`mt-1 w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs transition-colors ${
-                          selectedDate === date
-                            ? "bg-purple-500 text-white"
-                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        }`}
-                      >
-                        {date}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => navigateWeek("next")}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Schedule Items */}
-              <div className="space-y-3 min-h-[192px]">
-                {currentScheduleItems.length > 0 ? (
-                  currentScheduleItems.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start space-x-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-2" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{item.time}</p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <div className="flex -space-x-1 cursor-pointer">
-                            {item.attendeeIds.map((attendeeId) => {
-                              const attendee = people.find((p) => p.id === attendeeId) || people[0]
-                              return (
-                                <Avatar key={attendeeId} className="w-5 h-5 border border-white dark:border-gray-800">
-                                  <AvatarImage src={attendee.imageURL || "/placeholder.svg"} />
-                                  <AvatarFallback className="bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white">
-                                    {attendee.name
-                                      .split(" ")
-                                      .map((n) => n[0])
-                                      .join("")}
-                                  </AvatarFallback>
-                                </Avatar>
-                              )
-                            })}
-                            <div className="w-5 h-5 border border-white dark:border-gray-800 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                              <ChevronDown className="w-2 h-2" />
-                            </div>
-                          </div>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                          {people.map((person) => (
-                            <DropdownMenuItem
-                              key={person.id}
-                              onClick={() => {
-                                const currentAttendees = item.attendeeIds
-                                const newAttendees = currentAttendees.includes(person.id)
-                                  ? currentAttendees.filter((id) => id !== person.id)
-                                  : [...currentAttendees, person.id]
-                                handleChangeScheduleAttendees(selectedDate, index, newAttendees)
-                              }}
-                              className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              <Avatar className="w-5 h-5 mr-2">
-                                <AvatarImage src={person.imageURL || "/placeholder.svg"} />
-                                <AvatarFallback className="bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white">
-                                  {person.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex flex-col flex-1">
-                                <span className="text-sm">{person.name}</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">{person.email}</span>
-                              </div>
-                              {item.attendeeIds.includes(person.id) && (
-                                <CheckCircle className="w-4 h-4 ml-auto text-green-600 dark:text-green-400" />
-                              )}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button variant="ghost" size="icon" className="w-6 h-6">
-                        <MoreHorizontal className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No events scheduled for this day</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notes */}
-          <NotesSection
-            notes={notes}
-            onAddNote={handleAddNote}
-            onUpdateNote={handleUpdateNote}
-            onDeleteNote={handleDeleteNote}
-          />
+      {/* ===== Final CTA ===== */}
+      <section className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <h2
+          className="text-3xl sm:text-4xl font-bold mb-4"
+          style={{ fontFamily: "'Playfair Display', serif" }}
+        >
+          Ready to track your impact?
+        </h2>
+        <p className="text-gray-600 dark:text-gray-300 mb-8">
+          Sign in to the Performance Management System or create your AIESEC
+          account to get started.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href="/register">
+            <Button
+              size="lg"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+            >
+              Create an account
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-gray-300 dark:border-gray-700 bg-transparent"
+            >
+              Login
+            </Button>
+          </Link>
         </div>
-      </div>
+      </section>
+
+      {/* ===== Footer ===== */}
+      <footer className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
+              A
+            </div>
+            <span className="font-semibold">AIESEC in DLSU-Manila</span>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            AIESEC Management System · 2026 · @aiesec.ph members only
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }
