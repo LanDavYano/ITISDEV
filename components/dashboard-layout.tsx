@@ -60,7 +60,7 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
   const sidebarItems = [
     { name: "Dashboard", icon: BarChart3, path: "/dashboard" },
     { name: "Projects", icon: FileText, path: "/projects" },
-    { name: "My Task", icon: CheckCircle, path: "/" },
+    { name: "My Task", icon: CheckCircle, path: "/my-task" },
     { name: "People", icon: Users, path: "/people" },
     { name: "Chats", icon: MessageSquare, path: "/chats" },
     { name: "Documents", icon: FileText, path: "/documents" },
