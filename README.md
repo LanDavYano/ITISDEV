@@ -7,6 +7,9 @@ Initial repo for all ITISDEV deliverables
 - SQL  
 
 # Instructions to run
+  - npm run seed
+  - npm run db:check
+  
 ## Install Needed Dependencies
   - npm install
 
