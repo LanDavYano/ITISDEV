@@ -72,6 +72,37 @@ CREATE TABLE `user` (
         ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- 5. PERFORMANCE_RECORD  (the "Input Data" — one submission per member, period)
+CREATE TABLE performance_record (
+    record_id              INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+    user_id                INT UNSIGNED      NOT NULL,
+    period_month           ENUM('January','February','March','April','May','June',
+                                'July','August','September','October','November',
+                                'December')  NOT NULL,
+    period_year            SMALLINT UNSIGNED NOT NULL,
+    deliverables_assigned  INT UNSIGNED      NOT NULL DEFAULT 0,
+    deliverables_answered  INT UNSIGNED      NOT NULL DEFAULT 0,
+    meetings_total         INT UNSIGNED      NOT NULL DEFAULT 0,
+    meetings_attended      INT UNSIGNED      NOT NULL DEFAULT 0,
+    qualitative_answer     TEXT              NULL,
+    quantitative_rating    TINYINT UNSIGNED  NULL,   -- 0..100, validated by CHECK
+    created_at             TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at             TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                                      ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT pk_performance_record PRIMARY KEY (record_id),
+    CONSTRAINT uq_record_per_period  UNIQUE (user_id, period_year, period_month),
+    CONSTRAINT chk_rating_range      CHECK (quantitative_rating BETWEEN 0 AND 100),
+    CONSTRAINT chk_answered_le_assigned
+        CHECK (deliverables_answered <= deliverables_assigned),
+    CONSTRAINT chk_attended_le_total
+        CHECK (meetings_attended <= meetings_total),
+    CONSTRAINT chk_period_year       CHECK (period_year BETWEEN 2000 AND 2100),
+    CONSTRAINT fk_record_user
+        FOREIGN KEY (user_id) REFERENCES `user` (user_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE   -- remove a user's records if the user is deleted
+) ENGINE=InnoDB;
+
 -- 6. CIRCULAR FOREIGN KEYS  (added after `user` exists)
 ALTER TABLE department
     ADD CONSTRAINT fk_department_leader
