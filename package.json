@@ -7,7 +7,8 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "seed": "node model/seed.js"
+    "seed": "node database/seed.js",
+    "db:check": "node database/check-connection.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
