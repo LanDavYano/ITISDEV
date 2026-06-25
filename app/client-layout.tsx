@@ -19,7 +19,7 @@ interface Note {
 }
 
 // Public pages render without the dashboard chrome (sidebar/header).
-const PUBLIC_ROUTES = ["/", "/login", "/register"]
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/dashboard"]
 
 export default function ClientLayout({
   children,
