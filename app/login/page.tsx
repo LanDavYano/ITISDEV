@@ -4,20 +4,36 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: wire up real authentication.
-    router.push("/dashboard")
+    setError("")
+    setLoading(true)
+
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    })
+
+    if (result?.error) {
+      setError("Invalid email or password. Please try again.")
+      setLoading(false)
+    } else {
+      router.push("/dashboard")
+    }
   }
 
   return (
@@ -37,24 +53,17 @@ export default function LoginPage() {
             <div className="w-9 h-9 rounded-xl bg-white text-blue-700 flex items-center justify-center font-bold">
               A
             </div>
-            <span
-              className="text-2xl font-bold"
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
+            <span className="text-2xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
               AIESEC
             </span>
           </Link>
         </div>
         <div className="relative z-10">
-          <h2
-            className="text-3xl font-bold mb-3"
-            style={{ fontFamily: "'Playfair Display', serif" }}
-          >
+          <h2 className="text-3xl font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
             Welcome back, AIESECer.
           </h2>
           <p className="text-blue-50 max-w-sm">
-            Sign in to the Performance Management System and keep growing the
-            leader in you.
+            Sign in to the Performance Management System and keep growing the leader in you.
           </p>
         </div>
       </div>
@@ -71,9 +80,14 @@ export default function LoginPage() {
           </Link>
 
           <h1 className="text-3xl font-bold mb-2">Sign in</h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-8">
-            Use your AIESEC email to continue.
-          </p>
+          <p className="text-gray-500 dark:text-gray-400 mb-8">Use your AIESEC email to continue.</p>
+
+          {error && (
+            <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-sm px-4 py-3 rounded-xl mb-6">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -91,10 +105,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link
-                  href="/login"
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
+                <Link href="/login" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -110,18 +121,23 @@ export default function LoginPage() {
             </div>
             <Button
               type="submit"
+              disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Sign in
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
             </Button>
           </form>
 
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-6 text-center">
             New to AIESEC?{" "}
-            <Link
-              href="/register"
-              className="text-blue-600 dark:text-blue-400 font-medium hover:underline"
-            >
+            <Link href="/register" className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
               Create an account
             </Link>
           </p>
