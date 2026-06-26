@@ -33,6 +33,7 @@ export const authOptions: NextAuthOptions = {
             .select('+password')
             .populate('role', 'title level')
             .populate('department', 'name')
+            .populate('subDepartment', 'name')
 
           // --- Handle Incorrect Login Attempts -------------------------
           // Return null for both "no such user" and "wrong password" so we
@@ -55,6 +56,7 @@ export const authOptions: NextAuthOptions = {
             role:       user.role?.title ?? 'Member',
             roleLevel:  user.role?.level ?? 1,
             department: user.department?.name ?? '',
+            subDepartment: user.subDepartment?.name ?? '',
           }
         } catch (err) {
           console.error('[auth] authorize error:', err)
@@ -73,6 +75,7 @@ export const authOptions: NextAuthOptions = {
         token.role       = (user as any).role
         token.roleLevel  = (user as any).roleLevel
         token.department = (user as any).department
+        token.subDepartment = (user as any).subDepartment
       }
       return token
     },
@@ -84,6 +87,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role       = token.role as string
         session.user.roleLevel  = token.roleLevel as number
         session.user.department = token.department as string
+        session.user.subDepartment = token.subDepartment as string
       }
       return session
     },

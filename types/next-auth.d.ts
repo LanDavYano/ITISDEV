@@ -9,6 +9,7 @@ declare module 'next-auth' {
     role: string
     roleLevel: number
     department: string
+    subDepartment: string
   }
   interface Session {
     user: {
@@ -20,6 +21,7 @@ declare module 'next-auth' {
       role: string
       roleLevel: number
       department: string
+      subDepartment: string
     }
   }
 }
@@ -32,5 +34,6 @@ declare module 'next-auth/jwt' {
     role: string
     roleLevel: number
     department: string
+    subDepartment: string
   }
 }

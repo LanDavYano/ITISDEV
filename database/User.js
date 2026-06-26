@@ -64,6 +64,10 @@ const userSchema = new mongoose.Schema(
       ref: "SubDepartment",
       default: null,
     },
+    profilePicture: {
+      type: String,
+      default: '/images/default-avatar.png',
+    },
   },
   { timestamps: true } // created_at / updated_at
 )
