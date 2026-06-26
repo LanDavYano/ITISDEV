@@ -4,10 +4,11 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { signIn } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { roleHomePath } from "@/lib/roles"
 import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
@@ -32,7 +33,10 @@ export default function LoginPage() {
       setError("Invalid email or password. Please try again.")
       setLoading(false)
     } else {
-      router.push("/dashboard")
+      // Redirect based on the signed-in user's role.
+      const session = await getSession()
+      router.push(roleHomePath(session?.user?.roleLevel))
+      router.refresh()
     }
   }
 
