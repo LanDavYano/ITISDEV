@@ -14,6 +14,7 @@ const Department = require("./Department")
 const SubDepartment = require("./SubDepartment")
 const User = require("./User")
 const PerformanceRecord = require("./PerformanceRecord")
+const PasswordResetToken = require("./PasswordResetToken")
 
 module.exports = {
   connectDB,
@@ -25,4 +26,5 @@ module.exports = {
   SubDepartment,
   User,
   PerformanceRecord,
+  PasswordResetToken,
 }
