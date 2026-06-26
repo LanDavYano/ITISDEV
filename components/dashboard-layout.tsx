@@ -376,7 +376,7 @@ export default function DashboardLayout({ children, projects, onAddProject }: Da
                     <Button
                       variant="ghost"
                       className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      onClick={() => signOut({ callbackUrl: '/login' })}
+                      onClick={() => signOut({ callbackUrl: '/' })}
                     >
                       <LogOut className="w-4 h-4 mr-2" />
                       Sign Out

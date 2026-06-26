@@ -540,7 +540,7 @@ export default function AdminPage() {
           <div className="sidebar-bottom">
             <div
               className="menu-item"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ callbackUrl: "/" })}
               style={{ cursor: "pointer" }}
             >
               <span style={{ color: "#ef4444", fontWeight: 600 }}>Log Out</span>
