@@ -33,23 +33,31 @@ const userSchema = new mongoose.Schema(
       minlength: 8,
       select: false, // never return the hash by default
     },
-    birthdate: { type: Date, required: true },
+    birthdate: { type: Date, required: false },
     idNumber: {
       type: String,
-      required: true,
-      unique: true,
+      required: false,
       trim: true,
-      maxlength: 20, // string preserves leading zeros
+      maxlength: 20,
+      index: { unique: true, sparse: true }, // sparse allows multiple nulls
+    },
+    userType: {
+      type: String,
+      enum: ["admin", "member"],
+      required: true,
+      default: "member",
     },
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
-      required: true,
+      required: false,
+      default: null,
     },
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
-      required: true,
+      required: false,
+      default: null,
     },
     subDepartment: {
       type: mongoose.Schema.Types.ObjectId,

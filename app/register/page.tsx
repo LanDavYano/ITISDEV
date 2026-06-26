@@ -11,7 +11,6 @@ import { ArrowLeft } from "lucide-react"
 
 export default function RegisterPage() {
   const router = useRouter()
-  const [role, setRole] = useState<"admin" | "member">("member")
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -19,14 +18,39 @@ export default function RegisterPage() {
     password: "",
     confirm: "",
   })
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const update = (key: keyof typeof form, value: string) =>
     setForm((f) => ({ ...f, [key]: value }))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: wire up real registration.
-    router.push("/dashboard")
+    setError("")
+
+    if (form.password !== form.confirm) {
+      setError("Passwords do not match.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, userType: "member" }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Registration failed.")
+        return
+      }
+      router.push("/dashboard")
+    } catch {
+      setError("Network error. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -86,26 +110,11 @@ export default function RegisterPage() {
             </span>
           </p>
 
-          {/* Role selector */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {(["admin", "member"] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`text-left rounded-xl border p-4 transition-colors ${
-                  role === r
-                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
-              >
-                <div className="font-semibold capitalize">{r}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {r === "admin" ? "Manage & oversee" : "Collaborate on tasks"}
-                </div>
-              </button>
-            ))}
-          </div>
+          {error && (
+            <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -173,9 +182,10 @@ export default function RegisterPage() {
             </div>
             <Button
               type="submit"
+              disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Create account
+              {loading ? "Creating account…" : "Create account"}
             </Button>
           </form>
 
