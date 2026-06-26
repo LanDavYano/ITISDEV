@@ -21,10 +21,10 @@ export function roleHomePath(roleLevel?: number): string {
   switch (roleLevel) {
     case ROLE_LEVELS.DEPT_LEADER:
     case ROLE_LEVELS.SUB_DEPT_LEADER:
-      return '/dashboard'
+      return '/admin'
     case ROLE_LEVELS.MEMBER:
     default:
-      return '/my-task'
+      return '/dashboard'
   }
 }
 
