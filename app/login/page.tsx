@@ -17,26 +17,35 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
+  const handleSubmit = async (e: React.FormEvent) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
-
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    })
-
-    if (result?.error) {
-      setError("Invalid email or password. Please try again.")
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Login failed.")
+        return
+      }
+      // Role-based redirect
+      if (data.userType === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
+    } catch {
+      setError("Network error. Please try again.")
+    } finally {
       setLoading(false)
-    } else {
-      // Redirect based on the signed-in user's role.
-      const session = await getSession()
-      router.push(roleHomePath(session?.user?.roleLevel))
-      router.refresh()
     }
   }
 
@@ -84,11 +93,12 @@ export default function LoginPage() {
           </Link>
 
           <h1 className="text-3xl font-bold mb-2">Sign in</h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-8">Use your AIESEC email to continue.</p>
+          <p className="text-gray-500 dark:text-gray-400 mb-8">
+            Use your AIESEC email to continue.
+          </p>
 
           {error && (
-            <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-sm px-4 py-3 rounded-xl mb-6">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
@@ -109,7 +119,10 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/login" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
                   Forgot password?
                 </Link>
               </div>
@@ -126,16 +139,10 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
+              disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
+              {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
 
