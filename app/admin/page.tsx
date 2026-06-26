@@ -27,9 +27,9 @@ interface PopulatedMember {
   lastName: string;
   email: string;
   idNumber: string;
-  role: { title: string; level: number } | null;
-  department: { name: string; officeType: string } | null;
-  subDepartment: { name: string } | null;
+  role: { _id?: string; title: string; level: number } | null;
+  department: { _id?: string; name: string; officeType: string } | null;
+  subDepartment: { _id?: string; name: string } | null;
 }
 
 interface DeptStatus {
@@ -284,6 +284,126 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
   );
 }
 
+// ─── Edit-member modal ────────────────────────────────────────────────────────
+
+interface EditMemberModalProps {
+  member: PopulatedMember;
+  onClose: () => void;
+  onUpdated: () => void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberModalProps) {
+  const memberAny = member as any;
+  const roleId: string = memberAny.role?._id ?? "";
+  const departmentId: string = memberAny.department?._id ?? "";
+
+  const [form, setForm] = useState({
+    firstName: member.firstName,
+    lastName: member.lastName,
+    roleId: roleId,
+    departmentId: departmentId,
+    birthdate: member.idNumber ? "" : "",
+  });
+  const [roles, setRoles] = useState<{ _id: string; title: string }[]>([]);
+  const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Fetch roles & departments for the dropdowns
+    Promise.all([
+      fetch("/api/admin/roles").then((r) => r.json()),
+      fetch("/api/admin/departments").then((r) => r.json()),
+    ]).then(([r, d]) => {
+      setRoles(r.roles ?? []);
+      setDepartments(d.departments ?? []);
+    });
+  }, []);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updateData: Record<string, unknown> = {
+        firstName: form.firstName,
+        lastName: form.lastName,
+      };
+      
+      // Only include role and department if they changed
+      const currentRoleId = memberAny.role?._id ?? "";
+      const currentDeptId = memberAny.department?._id ?? "";
+      
+      if (form.roleId && form.roleId !== currentRoleId) {
+        updateData.role = form.roleId;
+      }
+      if (form.departmentId && form.departmentId !== currentDeptId) {
+        updateData.department = form.departmentId;
+      }
+
+      const res = await fetch(`/api/admin/members/${member._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to update member");
+      showToast("Member updated successfully!", "success");
+      onUpdated();
+      onClose();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">Edit Member</div>
+        <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-color)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-sub)", marginBottom: 4 }}>{member.email}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{member.firstName} {member.lastName}</div>
+        </div>
+        <div className="form-row">
+          <div className="form-field">
+            <label>First Name</label>
+            <input value={form.firstName} onChange={set("firstName")} placeholder="First name" />
+          </div>
+          <div className="form-field">
+            <label>Last Name</label>
+            <input value={form.lastName} onChange={set("lastName")} placeholder="Last name" />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-field">
+            <label>Role</label>
+            <select value={form.roleId} onChange={set("roleId")}>
+              <option value="">Select role…</option>
+              {roles.map((r) => <option key={r._id} value={r._id}>{r.title}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label>Department</label>
+            <select value={form.departmentId} onChange={set("departmentId")}>
+              <option value="">Select department…</option>
+              {departments.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-action primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Update Member"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -297,6 +417,8 @@ export default function AdminPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<PopulatedMember | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg] = useState("");
 
@@ -389,6 +511,14 @@ export default function AdminPage() {
         <AddMemberModal
           onClose={() => setShowModal(false)}
           onCreated={() => { fetchMembers(); fetchStats(); }}
+          showToast={showToast}
+        />
+      )}
+      {showEditModal && editingMember && (
+        <EditMemberModal
+          member={editingMember}
+          onClose={() => { setShowEditModal(false); setEditingMember(null); }}
+          onUpdated={() => { fetchMembers(); fetchStats(); }}
           showToast={showToast}
         />
       )}
@@ -566,6 +696,14 @@ export default function AdminPage() {
                           onClick={() => router.push(`/profile/${m._id}`)}
                         >
                           View
+                        </button>
+                        <button
+                          className={`btn-icon admin-only${!isAdmin ? " disabled-btn" : ""}`}
+                          onClick={() => { setEditingMember(m); setShowEditModal(true); }}
+                          title={isAdmin ? "Edit member role & department" : "Admin only"}
+                          style={{ color: isAdmin ? "#037ef3" : undefined, borderColor: isAdmin ? "#c4deff" : undefined }}
+                        >
+                          Edit
                         </button>
                         <button
                           className={`btn-icon delete-btn admin-only${!isAdmin ? " disabled-btn" : ""}`}
