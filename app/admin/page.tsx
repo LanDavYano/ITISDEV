@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { signOut, useSession } from "next-auth/react"
 import {
   Users,
   BarChart3,
@@ -12,6 +13,7 @@ import {
   LayoutDashboard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { isAdminLevel } from "@/lib/roles"
 
 interface SessionInfo {
   name: string
@@ -22,10 +24,30 @@ interface SessionInfo {
 export default function AdminPage() {
   const router = useRouter()
   const [session, setSession] = useState<SessionInfo | null>(null)
+  const { data: nextAuthSession, status } = useSession()
 
   useEffect(() => {
-    // Read session cookie on client (non-httpOnly version would be needed;
-    // for now show a welcome if we have a session, else redirect to login)
+    if (status === "loading") return
+
+    const nextAuthUser = nextAuthSession?.user as any
+    if (nextAuthUser) {
+      const roleLevel = nextAuthUser.roleLevel
+      const role = nextAuthUser.role?.toLowerCase()
+      const isAdmin = isAdminLevel(roleLevel) || role === "admin"
+
+      if (!isAdmin) {
+        router.replace("/dashboard")
+        return
+      }
+
+      setSession({
+        name: nextAuthUser.name || `${nextAuthUser.firstName || ""} ${nextAuthUser.lastName || ""}`.trim(),
+        email: nextAuthUser.email || "",
+        userType: role === "admin" ? "admin" : "member",
+      })
+      return
+    }
+
     const match = document.cookie.match(/auth_session=([^;]+)/)
     if (match) {
       try {
@@ -38,13 +60,15 @@ export default function AdminPage() {
       } catch {
         router.replace("/login")
       }
+      return
     }
-    // If no cookie the user may have navigated here directly — still show page
-  }, [router])
+
+    router.replace("/login")
+  }, [nextAuthSession, router, status])
 
   const handleLogout = async () => {
     document.cookie = "auth_session=; path=/; max-age=0"
-    router.push("/login")
+    await signOut({ callbackUrl: "/login" })
   }
 
   return (

@@ -35,6 +35,7 @@ export default function LoginPage() {
     } else {
       // Redirect based on the signed-in user's role.
       const session = await getSession()
+      setLoading(false)
       router.push(roleHomePath(session?.user?.roleLevel))
       router.refresh()
     }
