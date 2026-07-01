@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectDB, User, PasswordResetToken } from "@/database"
+import { sendPasswordResetOtp } from "@/lib/email"
 
 const AIESEC_EMAIL_RE = /^[^\s@]+@aiesec\.ph$/i
 
@@ -35,12 +36,18 @@ export async function POST(req: NextRequest) {
 
     await PasswordResetToken.create({ email: normalised, token: otp, type: "otp", expiresAt })
 
-    // In production you would email the OTP here.
-    // For now, log it to the server console so devs can test.
-    console.log(`[forgot-password] OTP for ${normalised}: ${otp}`)
+    try {
+      await sendPasswordResetOtp(normalised, otp)
+    } catch (emailErr) {
+      console.error("[send-otp] email delivery failed:", emailErr)
+      return NextResponse.json(
+        { error: "Failed to send verification email. Please try again." },
+        { status: 500 }
+      )
+    }
 
     const body: Record<string, string> = { message: "Verification code sent." }
-    // Surface OTP in dev so the UI can display it to testers
+    // Expose OTP in dev so the UI can display it to testers
     if (process.env.NODE_ENV !== "production") {
       body.devOtp = otp
     }
