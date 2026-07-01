@@ -1,25 +1,11 @@
 "use client";
 
-/**
- * app/admin/page.tsx — AIESEC PM Portal · Member Management
- *
- * All data comes from the real MongoDB-backed API routes:
- *   GET  /api/admin/members        – member list
- *   POST /api/admin/members        – add member
- *   DELETE /api/admin/members/:id  – remove member
- *   GET  /api/admin/stats          – dashboard metrics & dept status
- *
- * Role-level gating matches the original:
- *   roleLevel < 3  → read-only (Member / Team Leader view)
- *   roleLevel >= 3 → full admin (Leader of Department / PM)
- */
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PopulatedMember {
   _id: string;
@@ -47,35 +33,52 @@ interface Stats {
   deptStatus: DeptStatus[];
 }
 
-// ─── Styles (self-contained, scoped to .aiesec-admin-root) ───────────────────
+interface Cycle {
+  _id: string;
+  periodMonth: string;
+  periodYear: number;
+  submissionDeadline: string;
+  isOpen: boolean;
+}
+
+interface PerfSummary {
+  quantitativeRating: number | null;
+  deliverablesAssigned: number;
+  deliverablesAnswered: number;
+  meetingsTotal: number;
+  meetingsAttended: number;
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const STYLES = `
 :root {
-    --bg-main: #fcfcfc;
-    --sidebar-bg: #f5f6f7;
-    --active-item-bg: #e6f0ff;
-    --text-color: #111;
-    --text-sub: #777;
-    --border-color: #eaeaea;
-    --primary-blue: #037ef3;
-    --primary-hover: #026bd6;
-    --secondary-bg: #f3f4f6;
-    --danger-red: #ef4444;
-    --danger-hover: #dc2626;
-    --success-green: #10b981;
-    --warning-yellow: #f59e0b;
-    --shadow-main: 0 2px 10px rgba(0,0,0,0.03);
+  --bg-main: #fcfcfc;
+  --sidebar-bg: #f5f6f7;
+  --active-item-bg: #e6f0ff;
+  --text-color: #111;
+  --text-sub: #777;
+  --border-color: #eaeaea;
+  --primary-blue: #037ef3;
+  --primary-hover: #026bd6;
+  --secondary-bg: #f3f4f6;
+  --danger-red: #ef4444;
+  --danger-hover: #dc2626;
+  --success-green: #10b981;
+  --warning-yellow: #f59e0b;
+  --shadow-main: 0 2px 10px rgba(0,0,0,0.03);
 }
 .aiesec-admin-root * { margin:0; padding:0; box-sizing:border-box; }
 .aiesec-admin-root { font-family:'Inter',sans-serif; color:var(--text-color); background:var(--bg-main); }
 .admin-app { display:flex; height:100vh; }
-.admin-sidebar { width:260px; background:var(--sidebar-bg); border-right:1px solid var(--border-color); display:flex; flex-direction:column; justify-content:space-between; padding:24px; }
+.admin-sidebar { width:260px; background:var(--sidebar-bg); border-right:1px solid var(--border-color); display:flex; flex-direction:column; justify-content:space-between; padding:24px; flex-shrink:0; }
 .sidebar-logo { font-size:22px; font-weight:700; margin-bottom:40px; color:var(--primary-blue); }
 .sidebar-menu { list-style:none; }
-.menu-item { display:flex; align-items:center; padding:12px 16px; border-radius:8px; cursor:pointer; margin-bottom:8px; color:var(--text-sub); font-weight:500; font-size:14px; }
+.menu-item { display:flex; align-items:center; padding:12px 16px; border-radius:8px; cursor:pointer; margin-bottom:8px; color:var(--text-sub); font-weight:500; font-size:14px; transition:background 0.15s; }
+.menu-item:hover { background:var(--secondary-bg); color:var(--text-color); }
 .menu-item.active { background:var(--active-item-bg); color:var(--primary-blue); font-weight:600; }
 .admin-main { flex-grow:1; overflow-y:auto; display:flex; flex-direction:column; }
-.admin-header { height:70px; display:flex; align-items:center; justify-content:space-between; padding:0 30px; border-bottom:1px solid var(--border-color); background:#fff; }
+.admin-header { height:70px; display:flex; align-items:center; justify-content:space-between; padding:0 30px; border-bottom:1px solid var(--border-color); background:#fff; flex-shrink:0; }
 .header-search { position:relative; width:350px; }
 .header-search input { width:100%; padding:10px 35px 10px 15px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-main); font-size:14px; outline:none; }
 .search-kbd { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:11px; color:var(--text-sub); background:var(--secondary-bg); padding:3px 6px; border-radius:4px; }
@@ -99,21 +102,28 @@ const STYLES = `
 .content-table { background:#fff; padding:25px; border-radius:12px; border:1px solid var(--border-color); box-shadow:var(--shadow-main); margin-bottom:20px; }
 .table-header { display:flex; justify-content:space-between; margin-bottom:20px; align-items:center; }
 .table-title { font-size:18px; font-weight:600; }
-.filter-dropdown { font-size:13px; font-weight:500; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; cursor:pointer; display:inline-block; margin-left:10px; }
-.table-grid-header { display:grid; grid-template-columns:2fr 1.5fr 1.5fr 1fr; gap:15px; padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:600; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px; }
+.filter-dropdown { font-size:13px; font-weight:500; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; cursor:pointer; display:inline-block; margin-left:10px; color:var(--text-color); background:#fff; }
+.table-grid-header { display:grid; grid-template-columns:2fr 1.5fr 1fr 1.5fr 1.5fr 1fr; gap:15px; padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:600; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px; }
 .table-body { display:flex; flex-direction:column; }
-.table-row { display:grid; grid-template-columns:2fr 1.5fr 1.5fr 1fr; gap:15px; align-items:center; padding:16px 0; border-bottom:1px solid var(--secondary-bg); transition:opacity 0.3s; }
-.table-row:last-child { border-bottom:none; padding-bottom:0; }
-.table-cell { font-size:14px; font-weight:500; }
+.table-row-6 { display:grid; grid-template-columns:2fr 1.5fr 1fr 1.5fr 1.5fr 1fr; gap:15px; align-items:center; padding:16px 0; border-bottom:1px solid var(--secondary-bg); transition:opacity 0.3s; }
+.table-row-6:last-child { border-bottom:none; padding-bottom:0; }
+.table-cell { font-size:14px; font-weight:500; min-width:0; }
 .member-subtext { font-size:12px; color:var(--text-sub); font-weight:400; margin-top:2px; }
 .member { display:flex; align-items:center; gap:12px; }
-.member-avatar { width:36px; height:36px; border-radius:50%; }
+.member-avatar { width:36px; height:36px; border-radius:50%; flex-shrink:0; }
 .avatar-a { background:linear-gradient(135deg,#f6d365,#fda085); }
 .avatar-b { background:linear-gradient(135deg,#84fab0,#8fd3f4); }
 .avatar-c { background:linear-gradient(135deg,#cfd9df,#e2ebf0); }
 .avatar-d { background:linear-gradient(135deg,#a18cd1,#fbc2eb); }
-.row-actions { display:flex; gap:8px; }
-.btn-icon { background:none; border:1px solid var(--border-color); padding:6px 10px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500; color:var(--text-color); transition:0.2s; }
+.perf { display:flex; align-items:center; gap:8px; }
+.perf-bar-bg { flex-grow:1; height:6px; background:var(--secondary-bg); border-radius:4px; overflow:hidden; min-width:30px; }
+.perf-bar-fill { height:100%; border-radius:4px; }
+.perf-bar-fill.excellent { background:var(--success-green); }
+.perf-bar-fill.warning { background:var(--warning-yellow); }
+.perf-bar-fill.danger { background:var(--danger-red); }
+.perf-score { font-size:12px; font-weight:600; min-width:32px; flex-shrink:0; }
+.row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.btn-icon { background:none; border:1px solid var(--border-color); padding:5px 9px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500; color:var(--text-color); transition:0.2s; white-space:nowrap; }
 .btn-icon:hover { background:var(--secondary-bg); }
 .delete-btn { color:var(--danger-red); border-color:#fca5a5; }
 .delete-btn:hover { background:#fee2e2; border-color:var(--danger-red); }
@@ -123,8 +133,8 @@ const STYLES = `
 .widget-desc { font-size:13px; color:var(--text-sub); margin-bottom:15px; }
 .broadcast-input { width:100%; height:100px; padding:12px; border:1px solid var(--border-color); border-radius:8px; resize:none; font-family:inherit; font-size:14px; outline:none; }
 .broadcast-input:focus { border-color:var(--primary-blue); }
-.dept-list { list-style:none; display:flex; flex-direction:column; gap:12px; margin-top:15px; }
-.dept-list li { display:flex; justify-content:space-between; align-items:center; font-size:14px; font-weight:500; padding:8px 0; border-bottom:1px solid var(--secondary-bg); }
+.dept-list { list-style:none; display:flex; flex-direction:column; gap:0; margin-top:15px; }
+.dept-list li { display:flex; justify-content:space-between; align-items:center; font-size:14px; font-weight:500; padding:10px 0; border-bottom:1px solid var(--secondary-bg); }
 .dept-list li:last-child { border-bottom:none; }
 .status-pill { font-size:12px; padding:4px 10px; border-radius:12px; font-weight:600; }
 .status-pill.success { background:#d1fae5; color:#065f46; }
@@ -138,7 +148,6 @@ const STYLES = `
 .toast.success { background:#10b981; }
 .toast.error { background:#ef4444; }
 @keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-/* Add-member modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:100; }
 .modal-box { background:#fff; border-radius:16px; padding:32px; width:520px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.15); }
 .modal-title { font-size:20px; font-weight:700; margin-bottom:20px; }
@@ -148,7 +157,34 @@ const STYLES = `
 .form-field input, .form-field select { padding:9px 12px; border:1px solid var(--border-color); border-radius:8px; font-size:14px; outline:none; font-family:inherit; }
 .form-field input:focus, .form-field select:focus { border-color:var(--primary-blue); }
 .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
+.dept-status-row { display:flex; align-items:center; justify-content:space-between; padding:12px 4px; border-bottom:1px solid var(--secondary-bg); }
+.dept-status-row:last-child { border-bottom:none; }
 `;
+
+// ─── PerfBar ──────────────────────────────────────────────────────────────────
+
+function PerfBar({ perf }: { perf: PerfSummary | undefined }) {
+  if (!perf) return <span style={{ color: "#ccc", fontSize: 13 }}>No submission</span>;
+
+  const rating = perf.quantitativeRating;
+  const score = rating !== null
+    ? rating
+    : perf.deliverablesAssigned > 0
+      ? Math.round((perf.deliverablesAnswered / perf.deliverablesAssigned) * 100)
+      : null;
+
+  if (score === null) return <span style={{ color: "#ccc", fontSize: 13 }}>—</span>;
+
+  const fillClass = score >= 70 ? "excellent" : score >= 40 ? "warning" : "danger";
+  return (
+    <div className="perf">
+      <div className="perf-bar-bg">
+        <div className={`perf-bar-fill ${fillClass}`} style={{ width: `${score}%` }} />
+      </div>
+      <span className="perf-score">{score}%</span>
+    </div>
+  );
+}
 
 // ─── Avatar helper ────────────────────────────────────────────────────────────
 
@@ -159,13 +195,13 @@ function avatarClass(id: string) {
   return AVATAR_CLASSES[sum % AVATAR_CLASSES.length];
 }
 
-// ─── Toast component ──────────────────────────────────────────────────────────
+// ─── Toast ────────────────────────────────────────────────────────────────────
 
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return <div className={`toast ${type}`}>{msg}</div>;
 }
 
-// ─── Add-member modal ─────────────────────────────────────────────────────────
+// ─── AddMemberModal ───────────────────────────────────────────────────────────
 
 interface AddMemberModalProps {
   onClose: () => void;
@@ -183,7 +219,6 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Fetch roles & departments for the dropdowns
     Promise.all([
       fetch("/api/admin/roles").then((r) => r.json()),
       fetch("/api/admin/departments").then((r) => r.json()),
@@ -218,8 +253,8 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
       showToast("Member added successfully!", "success");
       onCreated();
       onClose();
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
     } finally {
       setSaving(false);
     }
@@ -284,7 +319,7 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
   );
 }
 
-// ─── Edit-member modal ────────────────────────────────────────────────────────
+// ─── EditMemberModal ──────────────────────────────────────────────────────────
 
 interface EditMemberModalProps {
   member: PopulatedMember;
@@ -295,22 +330,17 @@ interface EditMemberModalProps {
 
 function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberModalProps) {
   const memberAny = member as any;
-  const roleId: string = memberAny.role?._id ?? "";
-  const departmentId: string = memberAny.department?._id ?? "";
-
   const [form, setForm] = useState({
     firstName: member.firstName,
     lastName: member.lastName,
-    roleId: roleId,
-    departmentId: departmentId,
-    birthdate: member.idNumber ? "" : "",
+    roleId: memberAny.role?._id ?? "",
+    departmentId: memberAny.department?._id ?? "",
   });
   const [roles, setRoles] = useState<{ _id: string; title: string }[]>([]);
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Fetch roles & departments for the dropdowns
     Promise.all([
       fetch("/api/admin/roles").then((r) => r.json()),
       fetch("/api/admin/departments").then((r) => r.json()),
@@ -330,17 +360,10 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
         firstName: form.firstName,
         lastName: form.lastName,
       };
-      
-      // Only include role and department if they changed
       const currentRoleId = memberAny.role?._id ?? "";
       const currentDeptId = memberAny.department?._id ?? "";
-      
-      if (form.roleId && form.roleId !== currentRoleId) {
-        updateData.role = form.roleId;
-      }
-      if (form.departmentId && form.departmentId !== currentDeptId) {
-        updateData.department = form.departmentId;
-      }
+      if (form.roleId && form.roleId !== currentRoleId) updateData.role = form.roleId;
+      if (form.departmentId && form.departmentId !== currentDeptId) updateData.department = form.departmentId;
 
       const res = await fetch(`/api/admin/members/${member._id}`, {
         method: "PATCH",
@@ -352,8 +375,8 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
       showToast("Member updated successfully!", "success");
       onUpdated();
       onClose();
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
     } finally {
       setSaving(false);
     }
@@ -370,11 +393,11 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
         <div className="form-row">
           <div className="form-field">
             <label>First Name</label>
-            <input value={form.firstName} onChange={set("firstName")} placeholder="First name" />
+            <input value={form.firstName} onChange={set("firstName")} />
           </div>
           <div className="form-field">
             <label>Last Name</label>
-            <input value={form.lastName} onChange={set("lastName")} placeholder="Last name" />
+            <input value={form.lastName} onChange={set("lastName")} />
           </div>
         </div>
         <div className="form-row">
@@ -410,17 +433,20 @@ export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [members, setMembers] = useState<PopulatedMember[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [members, setMembers]               = useState<PopulatedMember[]>([]);
+  const [stats, setStats]                   = useState<Stats | null>(null);
+  const [currentCycle, setCurrentCycle]     = useState<Cycle | null>(null);
+  const [performanceMap, setPerformanceMap] = useState<Record<string, PerfSummary>>({});
   const [loadingMembers, setLoadingMembers] = useState(true);
-  const [loadingStats, setLoadingStats] = useState(true);
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingMember, setEditingMember] = useState<PopulatedMember | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [broadcastMsg, setBroadcastMsg] = useState("");
+  const [loadingStats, setLoadingStats]     = useState(true);
+  const [removingId, setRemovingId]         = useState<string | null>(null);
+  const [search, setSearch]                 = useState("");
+  const [showModal, setShowModal]           = useState(false);
+  const [showEditModal, setShowEditModal]   = useState(false);
+  const [editingMember, setEditingMember]   = useState<PopulatedMember | null>(null);
+  const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [broadcastMsg, setBroadcastMsg]     = useState("");
+  const [activeTab, setActiveTab]           = useState<"dashboard" | "members">("dashboard");
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
 
@@ -429,7 +455,6 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // ── Fetch members ──
   const fetchMembers = useCallback(async () => {
     setLoadingMembers(true);
     try {
@@ -443,7 +468,6 @@ export default function AdminPage() {
     }
   }, [showToast]);
 
-  // ── Fetch stats ──
   const fetchStats = useCallback(async () => {
     setLoadingStats(true);
     try {
@@ -455,15 +479,34 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchCycleAndPerf = useCallback(async () => {
+    try {
+      const [cycleRes, perfRes] = await Promise.all([
+        fetch("/api/cycles/current"),
+        fetch("/api/admin/performance"),
+      ]);
+      if (cycleRes.ok) {
+        const c = await cycleRes.json();
+        if (!c.error) setCurrentCycle(c);
+      }
+      if (perfRes.ok) {
+        const p = await perfRes.json();
+        setPerformanceMap(p);
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
       fetchMembers();
       fetchStats();
+      fetchCycleAndPerf();
     }
-  }, [status, router, fetchMembers, fetchStats]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf]);
 
-  // ── Delete member ──
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Remove ${name} from the LC portal? This cannot be undone.`)) return;
     setRemovingId(id);
@@ -473,15 +516,14 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(data.error ?? "Delete failed");
       setMembers((prev) => prev.filter((m) => m._id !== id));
       showToast("Member removed.", "success");
-      fetchStats(); // refresh counts
-    } catch (err: any) {
-      showToast(err.message, "error");
+      fetchStats();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
     } finally {
       setRemovingId(null);
     }
   };
 
-  // ── Filtered members ──
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
     const q = search.toLowerCase();
@@ -494,11 +536,13 @@ export default function AdminPage() {
     );
   }, [members, search]);
 
-  // ── Date labels ──
   const todayLabel = useMemo(
     () => new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" }),
     []
   );
+
+  const formatDeadlineShort = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   if (status === "loading") return null;
 
@@ -526,22 +570,35 @@ export default function AdminPage() {
       <div className="admin-app">
         {/* ── Sidebar ── */}
         <nav className="admin-sidebar">
-          <div className="sidebar-top">
+          <div>
             <div className="sidebar-logo">
               AIESEC <span style={{ fontWeight: 400, fontSize: 14, color: "#666" }}>PM Admin</span>
             </div>
             <ul className="sidebar-menu">
-              <li className="menu-item" onClick={() => router.push("/dashboard")}>
+              <li
+                className={`menu-item${activeTab === "dashboard" ? " active" : ""}`}
+                onClick={() => setActiveTab("dashboard")}
+              >
                 LC Dashboard
               </li>
-              <li className="menu-item active">Member Management</li>
+              <li
+                className={`menu-item${activeTab === "members" ? " active" : ""}`}
+                onClick={() => setActiveTab("members")}
+              >
+                Member Management
+              </li>
+              <li
+                className="menu-item"
+                onClick={() => router.push("/admin/deadline")}
+              >
+                Deadline Management
+              </li>
             </ul>
           </div>
-          <div className="sidebar-bottom">
+          <div>
             <div
               className="menu-item"
               onClick={() => signOut({ callbackUrl: "/" })}
-              style={{ cursor: "pointer" }}
             >
               <span style={{ color: "#ef4444", fontWeight: 600 }}>Log Out</span>
             </div>
@@ -565,7 +622,7 @@ export default function AdminPage() {
               <div style={{ textAlign: "right", lineHeight: 1.2, fontSize: 13, fontWeight: 500 }}>
                 <div>{session?.user?.name ?? "—"}</div>
                 <div style={{ color: "#777", fontSize: 11 }}>
-                  {(session?.user as any)?.department ?? "—"}
+                  {(session?.user as any)?.department ?? "Performance Management"}
                 </div>
               </div>
               <div className="profile-avatar" />
@@ -578,25 +635,39 @@ export default function AdminPage() {
             <div className="body-intro">
               <div>
                 <div className="body-date">{todayLabel}</div>
-                <h1 className="body-greeting">LC Member Management.</h1>
+                <h1 className="body-greeting">
+                  {activeTab === "dashboard" ? "LC Dashboard." : "LC Member Management."}
+                </h1>
               </div>
               <div className="intro-actions">
-                <button
-                  className={`btn-action secondary${!isAdmin ? " restricted" : ""}`}
-                  onClick={() =>
-                    broadcastMsg.trim()
-                      ? showToast("Broadcast sent to all members!", "success")
-                      : showToast("Write a message first.", "error")
-                  }
-                >
-                  Broadcast Reminder
-                </button>
-                <button
-                  className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
-                  onClick={() => setShowModal(true)}
-                >
-                  + Add Member
-                </button>
+                {activeTab === "members" && (
+                  <>
+                    <button
+                      className={`btn-action secondary${!isAdmin ? " restricted" : ""}`}
+                      onClick={() =>
+                        broadcastMsg.trim()
+                          ? showToast("Broadcast sent to all members!", "success")
+                          : showToast("Write a message first.", "error")
+                      }
+                    >
+                      Broadcast Reminder
+                    </button>
+                    <button
+                      className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
+                      onClick={() => setShowModal(true)}
+                    >
+                      + Add Member
+                    </button>
+                  </>
+                )}
+                {activeTab === "dashboard" && (
+                  <button
+                    className="btn-action primary"
+                    onClick={() => router.push("/admin/deadline")}
+                  >
+                    Manage Deadlines
+                  </button>
+                )}
               </div>
             </div>
 
@@ -604,170 +675,247 @@ export default function AdminPage() {
             <div className="body-metrics">
               <div className="metric-card">
                 <div className="metric-data">
-                  {loadingStats ? <div className="loading-shimmer" style={{ width: 60 }} /> : (stats?.totalMembers ?? "—")}
+                  {loadingStats
+                    ? <div className="loading-shimmer" style={{ width: 60 }} />
+                    : (stats?.totalMembers ?? "—")}
                 </div>
                 <div className="metric-label">Total Active Members</div>
               </div>
               <div className="metric-card">
                 <div className="metric-data">
-                  {loadingStats ? <div className="loading-shimmer" style={{ width: 60 }} /> : stats?.avgKpiAchievement != null ? `${stats.avgKpiAchievement}%` : "N/A"}
+                  {loadingStats
+                    ? <div className="loading-shimmer" style={{ width: 60 }} />
+                    : stats?.avgKpiAchievement != null ? `${stats.avgKpiAchievement}%` : "N/A"}
                 </div>
                 <div className="metric-label">
-                  Avg KPI Achievement {stats?.currentPeriod ? `(${stats.currentPeriod})` : ""}
+                  Avg KPI Achievement{stats?.currentPeriod ? ` (${stats.currentPeriod})` : ""}
                 </div>
               </div>
               <div className="metric-card">
                 <div className="metric-data">
-                  {loadingStats ? <div className="loading-shimmer" style={{ width: 60 }} /> : (stats?.pendingSubmissions ?? "—")}
+                  {loadingStats
+                    ? <div className="loading-shimmer" style={{ width: 60 }} />
+                    : (stats?.pendingSubmissions ?? "—")}
                 </div>
                 <div className="metric-label">Pending Submissions This Period</div>
               </div>
             </div>
 
-            {/* Member table */}
-            <div className="content-table">
-              <div className="table-header">
-                <h2 className="table-title">
-                  All Members{" "}
-                  <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
-                    ({filtered.length})
-                  </span>
-                </h2>
-              </div>
-
-              <div className="table-grid-header">
-                <div>Member</div>
-                <div>Department</div>
-                <div>Role</div>
-                <div>Actions</div>
-              </div>
-
-              <div className="table-body">
-                {loadingMembers ? (
-                  [1, 2, 3].map((i) => (
-                    <div className="table-row" key={i}>
-                      <div className="loading-shimmer" style={{ width: "80%" }} />
-                      <div className="loading-shimmer" style={{ width: "60%" }} />
-                      <div className="loading-shimmer" style={{ width: "50%" }} />
-                      <div className="loading-shimmer" style={{ width: "40%" }} />
-                    </div>
-                  ))
-                ) : filtered.length === 0 ? (
-                  <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
-                    {search ? "No members match your search." : "No members found."}
-                  </div>
-                ) : (
-                  filtered.map((m) => (
-                    <div
-                      className="table-row"
-                      key={m._id}
-                      style={{ opacity: removingId === m._id ? 0.4 : 1 }}
-                    >
-                      {/* Member */}
-                      <div className="table-cell member">
-                        <div className={`member-avatar ${avatarClass(m._id)}`} />
-                        <div>
-                          <div className="member-name">{m.firstName} {m.lastName}</div>
-                          <div className="member-subtext">{m.email}</div>
-                        </div>
-                      </div>
-
-                      {/* Department */}
-                      <div className="table-cell">
-                        <div>{m.department?.name ?? "—"}</div>
-                        <div className="member-subtext">{m.department?.officeType ?? ""}</div>
-                      </div>
-
-                      {/* Role */}
-                      <div
-                        className="table-cell"
-                        style={{
-                          fontWeight: m.role?.level === 3 ? 600 : 500,
-                          color: m.role?.level === 3 ? "#037ef3" : m.role?.level === 1 ? "#666" : undefined,
-                        }}
-                      >
-                        {m.role?.title ?? "—"}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="table-cell row-actions">
-                        <button
-                          className="btn-icon"
-                          onClick={() => router.push(`/profile/${m._id}`)}
-                        >
-                          View
-                        </button>
-                        <button
-                          className={`btn-icon admin-only${!isAdmin ? " disabled-btn" : ""}`}
-                          onClick={() => { setEditingMember(m); setShowEditModal(true); }}
-                          title={isAdmin ? "Edit member role & department" : "Admin only"}
-                          style={{ color: isAdmin ? "#037ef3" : undefined, borderColor: isAdmin ? "#c4deff" : undefined }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className={`btn-icon delete-btn admin-only${!isAdmin ? " disabled-btn" : ""}`}
-                          onClick={() => handleDelete(m._id, `${m.firstName} ${m.lastName}`)}
-                          title={isAdmin ? "Remove member" : "Admin only"}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Lower widgets */}
-            <div className="content-lower">
-              {/* Broadcast */}
-              <div className="widget-card">
-                <h2 className="lower-title">PM Quick Broadcast</h2>
-                <p className="widget-desc">Send a reminder or announcement to all active LC members.</p>
-                <textarea
-                  className="broadcast-input"
-                  placeholder="Type your message here…"
-                  value={broadcastMsg}
-                  onChange={(e) => setBroadcastMsg(e.target.value)}
-                />
-                <button
-                  className="btn-action primary full-width"
-                  onClick={() => {
-                    if (broadcastMsg.trim()) {
-                      showToast("Message sent to all members!", "success");
-                      setBroadcastMsg("");
-                    } else {
-                      showToast("Message cannot be empty.", "error");
-                    }
-                  }}
-                >
-                  Send to All Members
-                </button>
-              </div>
-
-              {/* Dept status */}
-              <div className="widget-card">
-                <h2 className="lower-title">Monthly Team Tool Status</h2>
+            {/* ── LC Dashboard tab ── */}
+            {activeTab === "dashboard" && (
+              <div className="content-table">
+                <div className="table-header">
+                  <h2 className="table-title">Department Submission Status</h2>
+                </div>
                 {loadingStats ? (
-                  <div className="loading-shimmer" style={{ marginTop: 15, height: 120 }} />
+                  [1, 2, 3].map((i) => (
+                    <div key={i} style={{ padding: "14px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                      <div className="loading-shimmer" style={{ width: "70%" }} />
+                    </div>
+                  ))
+                ) : stats?.deptStatus && stats.deptStatus.length > 0 ? (
+                  stats.deptStatus.map((dept, i) => (
+                    <div key={i} className="dept-status-row">
+                      <div style={{ fontWeight: 500, fontSize: 14 }}>{dept.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <span style={{ fontSize: 13, color: "#777" }}>{dept.ratio}</span>
+                        <span style={{
+                          fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 99,
+                          background: dept.pill === "success" ? "#d1fae5" : dept.pill === "warning" ? "#fef3c7" : "#dbeafe",
+                          color: dept.pill === "success" ? "#065f46" : dept.pill === "warning" ? "#92400e" : "#1e40af",
+                        }}>
+                          {dept.pillLabel}
+                        </span>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <ul className="dept-list">
-                    {(stats?.deptStatus ?? []).map((dept) => (
-                      <li key={dept.name}>
-                        <span>{dept.name}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 12, color: dept.pill === "warning" ? "#ef4444" : "#666", fontWeight: dept.pill === "warning" ? 600 : 400 }}>
-                            {dept.ratio}
-                          </span>
-                          <span className={`status-pill ${dept.pill}`}>{dept.pillLabel}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 14 }}>
+                    No department data available yet.
+                  </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* ── Member Management tab ── */}
+            {activeTab === "members" && (
+              <>
+                <div className="content-table">
+                  <div className="table-header">
+                    <h2 className="table-title">
+                      All Members{" "}
+                      <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
+                        ({filtered.length})
+                      </span>
+                    </h2>
+                    <div>
+                      <span className="filter-dropdown">All Departments ▾</span>
+                      <span className="filter-dropdown">All Roles ▾</span>
+                    </div>
+                  </div>
+
+                  <div className="table-grid-header">
+                    <div>Member</div>
+                    <div>Department</div>
+                    <div>Role</div>
+                    <div>Performance</div>
+                    <div>Next Deadline (MTT)</div>
+                    <div>Actions</div>
+                  </div>
+
+                  <div className="table-body">
+                    {loadingMembers ? (
+                      [1, 2, 3].map((i) => (
+                        <div className="table-row-6" key={i}>
+                          <div className="loading-shimmer" style={{ width: "80%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "50%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "50%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                        </div>
+                      ))
+                    ) : filtered.length === 0 ? (
+                      <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
+                        {search ? "No members match your search." : "No members found."}
+                      </div>
+                    ) : (
+                      filtered.map((m) => (
+                        <div
+                          className="table-row-6"
+                          key={m._id}
+                          style={{ opacity: removingId === m._id ? 0.4 : 1 }}
+                        >
+                          {/* Member */}
+                          <div className="table-cell member">
+                            <div className={`member-avatar ${avatarClass(m._id)}`} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {m.firstName} {m.lastName}
+                              </div>
+                              <div className="member-subtext" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {m.email}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Department */}
+                          <div className="table-cell">
+                            <div>{m.department?.name ?? "—"}</div>
+                            <div className="member-subtext">{m.department?.officeType ?? ""}</div>
+                          </div>
+
+                          {/* Role */}
+                          <div
+                            className="table-cell"
+                            style={{
+                              fontWeight: m.role?.level === 3 ? 600 : 500,
+                              color: m.role?.level === 3 ? "#037ef3" : m.role?.level === 1 ? "#666" : undefined,
+                              fontSize: 13,
+                            }}
+                          >
+                            {m.role?.title ?? "—"}
+                          </div>
+
+                          {/* Performance */}
+                          <div className="table-cell">
+                            <PerfBar perf={performanceMap[m._id]} />
+                          </div>
+
+                          {/* Next Deadline */}
+                          <div className="table-cell">
+                            {currentCycle ? (
+                              <>
+                                <div style={{ fontSize: 13 }}>Monthly Team Tool</div>
+                                <div className="member-subtext">
+                                  {formatDeadlineShort(currentCycle.submissionDeadline)}
+                                </div>
+                              </>
+                            ) : (
+                              <span style={{ color: "#ccc", fontSize: 13 }}>No active cycle</span>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="table-cell row-actions">
+                            <button
+                              className="btn-icon"
+                              onClick={() => router.push(`/profile/${m._id}`)}
+                            >
+                              View
+                            </button>
+                            <button
+                              className={`btn-icon${!isAdmin ? " disabled-btn" : ""}`}
+                              style={{ color: isAdmin ? "#037ef3" : undefined, borderColor: isAdmin ? "#c4deff" : undefined }}
+                              onClick={() => { setEditingMember(m); setShowEditModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={`btn-icon delete-btn${!isAdmin ? " disabled-btn" : ""}`}
+                              onClick={() => handleDelete(m._id, `${m.firstName} ${m.lastName}`)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Lower widgets */}
+                <div className="content-lower">
+                  <div className="widget-card">
+                    <h2 className="lower-title">PM Quick Broadcast</h2>
+                    <p className="widget-desc">Send a reminder or announcement to all active LC members.</p>
+                    <textarea
+                      className="broadcast-input"
+                      placeholder="Type your message here…"
+                      value={broadcastMsg}
+                      onChange={(e) => setBroadcastMsg(e.target.value)}
+                    />
+                    <button
+                      className="btn-action primary full-width"
+                      onClick={() => {
+                        if (broadcastMsg.trim()) {
+                          showToast("Message sent to all members!", "success");
+                          setBroadcastMsg("");
+                        } else {
+                          showToast("Message cannot be empty.", "error");
+                        }
+                      }}
+                    >
+                      Send to All Members
+                    </button>
+                  </div>
+                  <div className="widget-card">
+                    <h2 className="lower-title">Monthly Team Tool Status</h2>
+                    {loadingStats ? (
+                      <div className="loading-shimmer" style={{ marginTop: 15, height: 120 }} />
+                    ) : (
+                      <ul className="dept-list">
+                        {(stats?.deptStatus ?? []).map((dept) => (
+                          <li key={dept.name}>
+                            <span>{dept.name}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{
+                                fontSize: 12,
+                                color: dept.pill === "warning" ? "#ef4444" : "#666",
+                                fontWeight: dept.pill === "warning" ? 600 : 400,
+                              }}>
+                                {dept.ratio}
+                              </span>
+                              <span className={`status-pill ${dept.pill}`}>{dept.pillLabel}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>
