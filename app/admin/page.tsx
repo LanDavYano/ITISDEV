@@ -47,6 +47,13 @@ interface Stats {
   deptStatus: DeptStatus[];
 }
 
+interface Submission {
+  _id: string;
+  member: PopulatedMember;
+  status: "Submitted" | "Submitted with flags" | "Not submitted";
+  cycle: string;
+}
+
 // ─── Styles (self-contained, scoped to .aiesec-admin-root) ───────────────────
 
 const STYLES = `
@@ -288,7 +295,7 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const router = useRouter(); 
 
   const [members, setMembers] = useState<PopulatedMember[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -299,6 +306,11 @@ export default function AdminPage() {
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg] = useState("");
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [filterDept, setFilterDept] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const currentCycle = "June 2026";
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
 
@@ -306,6 +318,33 @@ export default function AdminPage() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   }, []);
+
+  // ── Compute Monitoring Summaries & Filters ──
+  const { filteredSubmissions, summaryCounts } = useMemo(() => {
+    let filtered = submissions;
+
+    // Apply Department Filter
+    if (filterDept !== "All") {
+      filtered = filtered.filter(sub => sub.member.department?.name === filterDept);
+    }
+    
+    // Apply Status Filter
+    if (filterStatus !== "All") {
+      filtered = filtered.filter(sub => sub.status === filterStatus);
+    }
+
+    // Calculate Summaries based on the UNFILTERED data for that department
+    // (So the top boxes always show the total for the selected department)
+    const baseForSummary = filterDept === "All" ? submissions : submissions.filter(sub => sub.member.department?.name === filterDept);
+    
+    const counts = {
+      submitted: baseForSummary.filter(s => s.status === "Submitted").length,
+      flagged: baseForSummary.filter(s => s.status === "Submitted with flags").length,
+      missing: baseForSummary.filter(s => s.status === "Not submitted").length,
+    };
+
+    return { filteredSubmissions: filtered, summaryCounts: counts };
+  }, [submissions, filterDept, filterStatus]);
 
   // ── Fetch members ──
   const fetchMembers = useCallback(async () => {
@@ -494,27 +533,60 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Member table */}
+            {/* --- MTT Monitoring Dashboard --- */}
             <div className="content-table">
-              <div className="table-header">
-                <h2 className="table-title">
-                  All Members{" "}
-                  <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
-                    ({filtered.length})
-                  </span>
-                </h2>
+              <div className="table-header" style={{ flexDirection: "column", alignItems: "flex-start", gap: 15 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <div>
+                    <h2 className="table-title">MTT Monitoring Dashboard</h2>
+                    <p style={{ fontSize: 13, color: "var(--text-sub)", marginTop: 4 }}>
+                      Current Cycle: <strong>{currentCycle}</strong>
+                    </p>
+                  </div>
+                  
+                  {/* Filters */}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <select className="filter-dropdown" value={filterDept} onChange={(e) => setFilterDept(e.target.value)} style={{ background: "white" }}>
+                      <option value="All">All Departments</option>
+                      <option value="Front Office">Front Office</option>
+                      <option value="Back Office">Back Office</option>
+                    </select>
+                    <select className="filter-dropdown" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ background: "white" }}>
+                      <option value="All">All Statuses</option>
+                      <option value="Submitted">Submitted</option>
+                      <option value="Submitted with flags">Flagged</option>
+                      <option value="Not submitted">Not Submitted</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Summary Counts */}
+                <div style={{ display: "flex", gap: 15, width: "100%", padding: 15, background: "var(--secondary-bg)", borderRadius: 8 }}>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: "var(--success-green)" }}>{summaryCounts.submitted}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Submitted</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center", borderLeft: "1px solid #ddd", borderRight: "1px solid #ddd" }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: "var(--warning-yellow)" }}>{summaryCounts.flagged}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Flagged</div>
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: "var(--danger-red)" }}>{summaryCounts.missing}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Not Submitted</div>
+                  </div>
+                </div>
               </div>
 
               <div className="table-grid-header">
                 <div>Member</div>
-                <div>Department</div>
-                <div>Role</div>
+                <div>Portfolio</div>
+                <div>Status</div>
                 <div>Actions</div>
               </div>
 
               <div className="table-body">
-                {loadingMembers ? (
-                  [1, 2, 3].map((i) => (
+                {loadingSubmissions ? (
+                   [1, 2, 3].map((i) => (
                     <div className="table-row" key={i}>
                       <div className="loading-shimmer" style={{ width: "80%" }} />
                       <div className="loading-shimmer" style={{ width: "60%" }} />
@@ -522,61 +594,49 @@ export default function AdminPage() {
                       <div className="loading-shimmer" style={{ width: "40%" }} />
                     </div>
                   ))
-                ) : filtered.length === 0 ? (
-                  <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
-                    {search ? "No members match your search." : "No members found."}
+                ) : filteredSubmissions.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-sub)" }}>
+                    <h3>No submission data found for this cycle.</h3>
                   </div>
                 ) : (
-                  filtered.map((m) => (
-                    <div
-                      className="table-row"
-                      key={m._id}
-                      style={{ opacity: removingId === m._id ? 0.4 : 1 }}
-                    >
-                      {/* Member */}
-                      <div className="table-cell member">
-                        <div className={`member-avatar ${avatarClass(m._id)}`} />
-                        <div>
-                          <div className="member-name">{m.firstName} {m.lastName}</div>
-                          <div className="member-subtext">{m.email}</div>
+                  filteredSubmissions.map((sub) => {
+                    // Determine color pill
+                    const pillClass = sub.status === "Submitted" ? "success" 
+                                    : sub.status === "Submitted with flags" ? "warning" 
+                                    : "danger"; // Ensure .danger is in your STYLES string!
+
+                    return (
+                      <div className="table-row" key={sub._id}>
+                        <div className="table-cell member">
+                          <div className={`member-avatar ${avatarClass(sub.member._id)}`} />
+                          <div>
+                            <div className="member-name">{sub.member.firstName} {sub.member.lastName}</div>
+                            <div className="member-subtext">{sub.member.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="table-cell">
+                          <div className="dept-main">{sub.member.department?.name ?? "—"}</div>
+                          <div className="member-subtext">{sub.member.subDepartment?.name ?? ""}</div>
+                        </div>
+
+                        <div className="table-cell">
+                          <span className={`status-pill ${pillClass}`} style={{ padding: "6px 12px" }}>
+                            {sub.status}
+                          </span>
+                        </div>
+
+                        <div className="table-cell row-actions">
+                          <button 
+                            className="btn-icon view-btn" 
+                            onClick={() => router.push(`/admin/submissions/${sub._id}`)}
+                          >
+                            📄 View Entry
+                          </button>
                         </div>
                       </div>
-
-                      {/* Department */}
-                      <div className="table-cell">
-                        <div>{m.department?.name ?? "—"}</div>
-                        <div className="member-subtext">{m.department?.officeType ?? ""}</div>
-                      </div>
-
-                      {/* Role */}
-                      <div
-                        className="table-cell"
-                        style={{
-                          fontWeight: m.role?.level === 3 ? 600 : 500,
-                          color: m.role?.level === 3 ? "#037ef3" : m.role?.level === 1 ? "#666" : undefined,
-                        }}
-                      >
-                        {m.role?.title ?? "—"}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="table-cell row-actions">
-                        <button
-                          className="btn-icon"
-                          onClick={() => router.push(`/profile/${m._id}`)}
-                        >
-                          View
-                        </button>
-                        <button
-                          className={`btn-icon delete-btn admin-only${!isAdmin ? " disabled-btn" : ""}`}
-                          onClick={() => handleDelete(m._id, `${m.firstName} ${m.lastName}`)}
-                          title={isAdmin ? "Remove member" : "Admin only"}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
