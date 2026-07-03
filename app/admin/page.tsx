@@ -49,6 +49,13 @@ interface PerfSummary {
   meetingsAttended: number;
 }
 
+interface Submission {
+  _id: string;
+  member: PopulatedMember;
+  status: "Submitted" | "Submitted with flags" | "Not submitted";
+  cycle: string;
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const STYLES = `
@@ -140,6 +147,7 @@ const STYLES = `
 .status-pill.success { background:#d1fae5; color:#065f46; }
 .status-pill.warning { background:#fef3c7; color:#92400e; }
 .status-pill.info { background:#dbeafe; color:#1e40af; }
+.status-pill.danger { background:#fee2e2; color:#991b1b; }
 .restricted { display:none !important; }
 .disabled-btn { opacity:0.4; cursor:not-allowed !important; pointer-events:none; }
 .loading-shimmer { background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; border-radius:6px; height:20px; }
@@ -447,6 +455,10 @@ export default function AdminPage() {
   const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg]     = useState("");
   const [activeTab, setActiveTab]           = useState<"dashboard" | "members">("dashboard");
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [filterDept, setFilterDept] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
 
@@ -454,6 +466,30 @@ export default function AdminPage() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   }, []);
+
+  const { filteredSubmissions, summaryCounts } = useMemo(() => {
+    let filtered = submissions;
+
+    if (filterDept !== "All") {
+      filtered = filtered.filter((sub) => sub.member.department?.name === filterDept);
+    }
+
+    if (filterStatus !== "All") {
+      filtered = filtered.filter((sub) => sub.status === filterStatus);
+    }
+
+    const baseForSummary = filterDept === "All"
+      ? submissions
+      : submissions.filter((sub) => sub.member.department?.name === filterDept);
+
+    const counts = {
+      submitted: baseForSummary.filter((s) => s.status === "Submitted").length,
+      flagged: baseForSummary.filter((s) => s.status === "Submitted with flags").length,
+      missing: baseForSummary.filter((s) => s.status === "Not submitted").length,
+    };
+
+    return { filteredSubmissions: filtered, summaryCounts: counts };
+  }, [submissions, filterDept, filterStatus]);
 
   const fetchMembers = useCallback(async () => {
     setLoadingMembers(true);
@@ -498,14 +534,32 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchSubmissions = useCallback(async () => {
+    setLoadingSubmissions(true);
+    try {
+      const res = await fetch("/api/admin/submissions");
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissions(data.submissions ?? data ?? []);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
       fetchMembers();
       fetchStats();
       fetchCycleAndPerf();
+      fetchSubmissions();
     }
-  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions]);
+
+  const currentCycleLabel = currentCycle ? `${currentCycle.periodMonth} ${currentCycle.periodYear}` : "No active cycle";
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Remove ${name} from the LC portal? This cannot be undone.`)) return;
@@ -704,36 +758,112 @@ export default function AdminPage() {
             {/* ── LC Dashboard tab ── */}
             {activeTab === "dashboard" && (
               <div className="content-table">
-                <div className="table-header">
-                  <h2 className="table-title">Department Submission Status</h2>
-                </div>
-                {loadingStats ? (
-                  [1, 2, 3].map((i) => (
-                    <div key={i} style={{ padding: "14px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
-                      <div className="loading-shimmer" style={{ width: "70%" }} />
+                <div className="table-header" style={{ flexDirection: "column", alignItems: "flex-start", gap: 15 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <div>
+                      <h2 className="table-title">MTT Monitoring Dashboard</h2>
+                      <p style={{ fontSize: 13, color: "var(--text-sub)", marginTop: 4 }}>
+                        Current Cycle: <strong>{currentCycleLabel}</strong>
+                      </p>
                     </div>
-                  ))
-                ) : stats?.deptStatus && stats.deptStatus.length > 0 ? (
-                  stats.deptStatus.map((dept, i) => (
-                    <div key={i} className="dept-status-row">
-                      <div style={{ fontWeight: 500, fontSize: 14 }}>{dept.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                        <span style={{ fontSize: 13, color: "#777" }}>{dept.ratio}</span>
-                        <span style={{
-                          fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 99,
-                          background: dept.pill === "success" ? "#d1fae5" : dept.pill === "warning" ? "#fef3c7" : "#dbeafe",
-                          color: dept.pill === "success" ? "#065f46" : dept.pill === "warning" ? "#92400e" : "#1e40af",
-                        }}>
-                          {dept.pillLabel}
-                        </span>
-                      </div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <select className="filter-dropdown" value={filterDept} onChange={(e) => setFilterDept(e.target.value)} style={{ background: "white" }}>
+                        <option value="All">All Departments</option>
+                        <option value="Front Office">Front Office</option>
+                        <option value="Back Office">Back Office</option>
+                      </select>
+                      <select className="filter-dropdown" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ background: "white" }}>
+                        <option value="All">All Statuses</option>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Submitted with flags">Flagged</option>
+                        <option value="Not submitted">Not Submitted</option>
+                      </select>
                     </div>
-                  ))
-                ) : (
-                  <div style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 14 }}>
-                    No department data available yet.
                   </div>
-                )}
+
+                  <div style={{ display: "flex", gap: 15, width: "100%", padding: 15, background: "var(--secondary-bg)", borderRadius: 8, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 140, textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: "var(--success-green)" }}>{summaryCounts.submitted}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Submitted</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 140, textAlign: "center", borderLeft: "1px solid #ddd", borderRight: "1px solid #ddd" }}>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: "var(--warning-yellow)" }}>{summaryCounts.flagged}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Flagged</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 140, textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: "var(--danger-red)" }}>{summaryCounts.missing}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-sub)" }}>Not Submitted</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: 15, paddingBottom: 12, borderBottom: "1px solid var(--border-color)", fontSize: 12, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <div>Member</div>
+                  <div>Portfolio</div>
+                  <div>Status</div>
+                  <div>Actions</div>
+                </div>
+
+                <div className="table-body">
+                  {loadingSubmissions ? (
+                    [1, 2, 3].map((i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: 15, alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                        <div className="loading-shimmer" style={{ width: "80%" }} />
+                        <div className="loading-shimmer" style={{ width: "60%" }} />
+                        <div className="loading-shimmer" style={{ width: "50%" }} />
+                        <div className="loading-shimmer" style={{ width: "40%" }} />
+                      </div>
+                    ))
+                  ) : filteredSubmissions.length === 0 ? (
+                    <div style={{ padding: "40px", textAlign: "center", color: "var(--text-sub)" }}>
+                      <h3>No submission data found for this cycle.</h3>
+                    </div>
+                  ) : (
+                    filteredSubmissions.map((sub) => {
+                      const pillClass = sub.status === "Submitted"
+                        ? "success"
+                        : sub.status === "Submitted with flags"
+                          ? "warning"
+                          : "danger";
+
+                      return (
+                        <div key={sub._id} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: 15, alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                          <div className="table-cell member">
+                            <div className={`member-avatar ${avatarClass(sub.member._id)}`} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {sub.member.firstName} {sub.member.lastName}
+                              </div>
+                              <div className="member-subtext" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {sub.member.email}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="table-cell">
+                            <div>{sub.member.department?.name ?? "—"}</div>
+                            <div className="member-subtext">{sub.member.subDepartment?.name ?? ""}</div>
+                          </div>
+
+                          <div className="table-cell">
+                            <span className={`status-pill ${pillClass}`} style={{ padding: "6px 12px" }}>
+                              {sub.status}
+                            </span>
+                          </div>
+
+                          <div className="table-cell row-actions">
+                            <button
+                              className="btn-icon view-btn"
+                              onClick={() => router.push(`/admin/submissions/${sub._id}`)}
+                            >
+                              View Entry
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
@@ -786,7 +916,6 @@ export default function AdminPage() {
                           key={m._id}
                           style={{ opacity: removingId === m._id ? 0.4 : 1 }}
                         >
-                          {/* Member */}
                           <div className="table-cell member">
                             <div className={`member-avatar ${avatarClass(m._id)}`} />
                             <div style={{ minWidth: 0 }}>
@@ -799,13 +928,11 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Department */}
                           <div className="table-cell">
                             <div>{m.department?.name ?? "—"}</div>
                             <div className="member-subtext">{m.department?.officeType ?? ""}</div>
                           </div>
 
-                          {/* Role */}
                           <div
                             className="table-cell"
                             style={{
@@ -817,12 +944,10 @@ export default function AdminPage() {
                             {m.role?.title ?? "—"}
                           </div>
 
-                          {/* Performance */}
                           <div className="table-cell">
                             <PerfBar perf={performanceMap[m._id]} />
                           </div>
 
-                          {/* Next Deadline */}
                           <div className="table-cell">
                             {currentCycle ? (
                               <>
@@ -836,7 +961,6 @@ export default function AdminPage() {
                             )}
                           </div>
 
-                          {/* Actions */}
                           <div className="table-cell row-actions">
                             <button
                               className="btn-icon"
@@ -864,7 +988,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Lower widgets */}
                 <div className="content-lower">
                   <div className="widget-card">
                     <h2 className="lower-title">PM Quick Broadcast</h2>
