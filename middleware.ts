@@ -26,5 +26,9 @@ export const config = {
     '/chats/:path*',
     '/documents/:path*',
     '/receipts/:path*',
+    '/performance/:path*',
+    '/team/:path*',
+    '/admin/:path*',
+    '/profile/:path*',
   ],
 }

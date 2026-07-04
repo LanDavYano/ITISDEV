@@ -11,8 +11,10 @@ interface Project {
   color: string
 }
 
-// Public pages render without the dashboard chrome (sidebar/header).
+// Pages that render without the dashboard chrome (sidebar/header) — they
+// bring their own layout. Matched exactly, or by prefix for nested routes.
 const PUBLIC_ROUTES = ["/", "/login", "/register", "/register/admin", "/forgot-password", "/dashboard", "/admin", "/admin/deadline"]
+const PUBLIC_PREFIXES = ["/admin/submissions", "/performance", "/team"]
 
 export default function ClientLayout({
   children,
@@ -33,8 +35,11 @@ export default function ClientLayout({
     setProjects([...projects, newProject])
   }
 
-  // Landing / auth pages stand on their own — no sidebar or top header.
-  if (PUBLIC_ROUTES.includes(pathname)) {
+  // Landing / auth / feature pages stand on their own — no sidebar or top header.
+  if (
+    PUBLIC_ROUTES.includes(pathname) ||
+    PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  ) {
     return <>{children}</>
   }
 

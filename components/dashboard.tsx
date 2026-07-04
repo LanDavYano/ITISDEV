@@ -13,6 +13,7 @@ import type { Deliverable, StatItem, ChartBar, PerformanceCycle, User } from './
 
 const NAV_ITEMS = [
   { label: 'LC Dashboard',   Icon: LayoutDashboard, href: '/dashboard' },
+  { label: 'Rating Submission', Icon: ListChecks,   href: '/performance' },
   { label: 'EXPA Leads',     Icon: Globe,           href: '/expa-leads' },
   { label: 'My Deliverables',Icon: ListChecks,      href: '/my-task' },
   { label: 'EB Updates',     Icon: MessageSquare,   href: '/chats' },
@@ -382,6 +383,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
               >
                 <Download className="w-4 h-4" />
                 Export MoS Report
+              </button>
+            </div>
+
+            {/* Performance submission CTA */}
+            <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-2xl p-5">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+                  <ListChecks className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-0.5">
+                    Performance Rating Submission
+                  </h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-400">
+                    Submit your goals and self-ratings for the current cycle, and review
+                    your assigned deliverables &amp; meetings.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleNav('/performance')}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0 ml-4"
+              >
+                Open Submission Form
               </button>
             </div>
 

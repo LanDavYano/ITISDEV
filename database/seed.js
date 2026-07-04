@@ -17,6 +17,10 @@ const Department = require("./Department")
 const SubDepartment = require("./SubDepartment")
 const User = require("./User")
 const PerformanceRecord = require("./PerformanceRecord")
+const EvaluationCycle = require("./EvaluationCycle")
+const AuditLog = require("./AuditLog")
+
+const MONTHS = PerformanceRecord.MONTHS
 
 // --- Reference data ---------------------------------------------------------
 
@@ -81,7 +85,9 @@ async function seed() {
 
   console.log("[seed] Clearing existing collections…")
   await Promise.all([
+    AuditLog.deleteMany({}),
     PerformanceRecord.deleteMany({}),
+    EvaluationCycle.deleteMany({}),
     User.deleteMany({}),
     SubDepartment.deleteMany({}),
     Department.deleteMany({}),
@@ -164,18 +170,36 @@ async function seed() {
   perfMgmt.subDeptLeader = teamLeader._id
   await perfMgmt.save()
 
-  // 6. Sample performance record for the member.
+  // 6. Current evaluation cycle (open, deadline = end of the current month).
+  console.log("[seed] Creating the current evaluation cycle…")
+  const now = new Date()
+  const periodMonth = MONTHS[now.getMonth()]
+  const periodYear = now.getFullYear()
+  const endOfMonth = new Date(periodYear, now.getMonth() + 1, 0, 23, 59, 59)
+  const cycle = await EvaluationCycle.create({
+    periodMonth,
+    periodYear,
+    submissionDeadline: endOfMonth,
+    createdBy: deptLeader._id,
+  })
+
+  // 7. Sample performance record for the member (current cycle, submitted,
+  //    with team-leader-assigned deliverable/meeting counts).
   console.log("[seed] Creating a sample performance record…")
   await PerformanceRecord.create({
     user: member._id,
-    periodMonth: "June",
-    periodYear: 2026,
+    periodMonth,
+    periodYear,
+    personalGoal: "Improve my time management and finish tasks ahead of deadlines.",
+    professionalGoal: "Onboard two new members and lead one EP consultation call.",
+    personalRating: 85,
+    professionalRating: 88,
+    submittedAt: new Date(),
+    // Team-leader-assigned counts:
     deliverablesAssigned: 10,
     deliverablesAnswered: 8,
     meetingsTotal: 4,
     meetingsAttended: 4,
-    qualitativeAnswer: "Strong month — onboarded two new members.",
-    quantitativeRating: 88,
   })
 
   console.log("\n[seed] Done ✅")
@@ -183,6 +207,7 @@ async function seed() {
   console.log(`  departments:      ${departments.length}`)
   console.log(`  sub-departments:  ${subDepartments.length}`)
   console.log(`  users:            3 (demo password: Password123!)`)
+  console.log(`  cycle:            ${cycle.periodMonth} ${cycle.periodYear} (deadline ${endOfMonth.toDateString()})`)
   console.log(`  performance recs: 1`)
 }
 
