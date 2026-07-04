@@ -1,14 +1,25 @@
 /**
- * PerformanceRecord model — the "Input Data": one submission per member, per
- * month/year period.
+ * PerformanceRecord model — one submission per member, per month/year cycle.
  *
- * SQL origin: `performance_record` table.
- * Constraints carried over:
- *  - uq_record_per_period           → compound unique (user, periodYear, periodMonth)
- *  - chk_rating_range               → quantitativeRating 0..100
- *  - chk_answered_le_assigned       → deliverablesAnswered <= deliverablesAssigned
- *  - chk_attended_le_total          → meetingsAttended <= meetingsTotal
- *  - chk_period_year                → periodYear 2000..2100
+ * Two groups of fields, written by different roles:
+ *
+ *  MEMBER-SUBMITTED (the "rating submission", done by all members incl. team leaders):
+ *   - personalGoal / professionalGoal        → Qualitative Answers (strings)
+ *   - personalRating / professionalRating    → Quantitative Answers (0–100)
+ *   - submittedAt                            → set when the member submits the form
+ *
+ *  TEAM-LEADER-ASSIGNED (per member, by the leader of their sub-department):
+ *   - deliverablesAssigned / deliverablesAnswered
+ *   - meetingsTotal / meetingsAttended
+ *
+ *  ADMIN REVIEW (data-integrity checks before evaluation is finalized):
+ *   - isFlagged / flagReason / flaggedBy / flaggedAt
+ *
+ * Constraints kept from the original SQL schema:
+ *  - unique (user, periodYear, periodMonth)
+ *  - ratings 0..100, periodYear 2000..2100
+ *  - deliverablesAnswered <= deliverablesAssigned
+ *  - meetingsAttended <= meetingsTotal
  */
 
 const { mongoose } = require("./db")
@@ -28,6 +39,16 @@ const MONTHS = [
   "December",
 ]
 
+const nonNegativeInt = {
+  type: Number,
+  default: 0,
+  min: 0,
+  validate: {
+    validator: Number.isInteger,
+    message: "{PATH} must be a whole number",
+  },
+}
+
 const performanceRecordSchema = new mongoose.Schema(
   {
     user: {
@@ -42,17 +63,34 @@ const performanceRecordSchema = new mongoose.Schema(
       min: 2000,
       max: 2100,
     },
-    deliverablesAssigned: { type: Number, default: 0, min: 0 },
-    deliverablesAnswered: { type: Number, default: 0, min: 0 },
-    meetingsTotal: { type: Number, default: 0, min: 0 },
-    meetingsAttended: { type: Number, default: 0, min: 0 },
-    qualitativeAnswer: { type: String, default: null },
-    quantitativeRating: {
-      type: Number,
+
+    // ── Qualitative Answers (member-submitted, string) ──────────────────────
+    personalGoal: { type: String, trim: true, maxlength: 2000, default: null },
+    professionalGoal: { type: String, trim: true, maxlength: 2000, default: null },
+
+    // ── Quantitative Answers (member-submitted, 0–100) ──────────────────────
+    personalRating: { type: Number, min: 0, max: 100, default: null },
+    professionalRating: { type: Number, min: 0, max: 100, default: null },
+
+    // Set when the member submits their form; null = not submitted yet
+    // (a record can exist beforehand if the team leader already assigned counts).
+    submittedAt: { type: Date, default: null },
+
+    // ── Team-leader-assigned counts ──────────────────────────────────────────
+    deliverablesAssigned: nonNegativeInt,
+    deliverablesAnswered: nonNegativeInt,
+    meetingsTotal: nonNegativeInt,
+    meetingsAttended: nonNegativeInt,
+
+    // ── Admin review / flagging ──────────────────────────────────────────────
+    isFlagged: { type: Boolean, default: false },
+    flagReason: { type: String, trim: true, maxlength: 1000, default: null },
+    flaggedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       default: null,
-      min: 0,
-      max: 100,
     },
+    flaggedAt: { type: Date, default: null },
   },
   { timestamps: true }
 )

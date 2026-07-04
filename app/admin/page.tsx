@@ -715,6 +715,12 @@ export default function AdminPage() {
               >
                 Deadline Management
               </li>
+              <li
+                className="menu-item"
+                onClick={() => router.push("/team")}
+              >
+                Team Records
+              </li>
             </ul>
           </div>
           <div>
@@ -832,6 +838,21 @@ export default function AdminPage() {
                       <h2 className="table-title">MTT Monitoring Dashboard</h2>
                       <p style={{ fontSize: 13, color: "var(--text-sub)", marginTop: 4 }}>
                         Current Cycle: <strong>{currentCycleLabel}</strong>
+                        {currentCycle && (
+                          <>
+                            {" · "}Deadline:{" "}
+                            <strong>{formatDeadlineShort(currentCycle.submissionDeadline)}</strong>
+                            {" "}
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: currentCycle.isOpen ? "var(--success-green)" : "var(--warning-yellow)",
+                              }}
+                            >
+                              {currentCycle.isOpen ? "• Open for submissions" : "• Finalized — entries locked"}
+                            </span>
+                          </>
+                        )}
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
