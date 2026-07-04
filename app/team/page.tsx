@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { roleHomePath } from "@/lib/roles"
 import {
   ArrowLeft,
   AlertCircle,
@@ -211,7 +212,7 @@ export default function TeamRecordsPage() {
               My own submission
             </Link>
             <Link
-              href={(session?.user?.roleLevel ?? 1) >= 2 ? "/admin" : "/dashboard"}
+              href={roleHomePath(session?.user?.roleLevel)}
               className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             >
               <ArrowLeft className="w-4 h-4" />

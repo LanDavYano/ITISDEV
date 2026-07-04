@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { roleHomePath } from "@/lib/roles"
 import {
   ArrowLeft,
   AlertCircle,
@@ -181,7 +182,7 @@ export default function PerformanceSubmissionPage() {
             </span>
           </div>
           <Link
-            href="/dashboard"
+            href={roleHomePath(session?.user?.roleLevel)}
             className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" />
