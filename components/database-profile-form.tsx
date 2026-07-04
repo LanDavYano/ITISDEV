@@ -17,6 +17,9 @@ interface UserProfile {
   birthdate?: string
   idNumber?: string
   profilePicture: string
+  role: string
+  roleId: string
+  roleLevel?: number | null
   department: string
   departmentId: string
   subDepartment: string
@@ -280,6 +283,17 @@ export function DatabaseProfileForm({ onUpdate }: ProfileFormProps) {
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
               Organization
             </h3>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Input
+                id="role"
+                value={formData.role || ''}
+                disabled={true}
+                className="bg-gray-50 dark:bg-gray-900 cursor-not-allowed opacity-60"
+              />
+              <p className="text-xs text-gray-500">Contact admin to change role</p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="department">Department</Label>

@@ -76,8 +76,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const { connectDB, User } = require("@/database");
+    const { connectDB, User, SubDepartment } = require("@/database");
     await connectDB();
+
+    let resolvedSubDepartment: string | null = null;
+    if (subDepartment) {
+      const subDeptDoc = await SubDepartment.findOne({ _id: subDepartment, department }).lean();
+      if (!subDeptDoc) {
+        return NextResponse.json(
+          { error: "Selected sub-department does not belong to the chosen department" },
+          { status: 400 }
+        );
+      }
+      resolvedSubDepartment = subDepartment;
+    }
 
     const newUser = await User.create({
       firstName,
@@ -88,7 +100,7 @@ export async function POST(req: NextRequest) {
       idNumber,
       role,
       department,
-      subDepartment: subDepartment ?? null,
+      subDepartment: resolvedSubDepartment,
     });
 
     return NextResponse.json(

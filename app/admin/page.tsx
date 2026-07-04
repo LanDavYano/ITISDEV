@@ -220,10 +220,11 @@ interface AddMemberModalProps {
 function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) {
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", password: "",
-    birthdate: "", idNumber: "", roleId: "", departmentId: "",
+    birthdate: "", idNumber: "", roleId: "", departmentId: "", subDepartmentId: "",
   });
   const [roles, setRoles] = useState<{ _id: string; title: string }[]>([]);
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
+  const [subDepartments, setSubDepartments] = useState<{ _id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -236,8 +237,27 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
     });
   }, []);
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  useEffect(() => {
+    if (!form.departmentId) {
+      setSubDepartments([]);
+      return;
+    }
+
+    fetch(`/api/admin/sub-departments?departmentId=${form.departmentId}`)
+      .then((r) => r.json())
+      .then((data) => setSubDepartments(data.subDepartments ?? []))
+      .catch(() => setSubDepartments([]));
+  }, [form.departmentId]);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const value = e.target.value;
+    setForm((f) => {
+      if (k === "departmentId") {
+        return { ...f, departmentId: value, subDepartmentId: "" };
+      }
+      return { ...f, [k]: value };
+    });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -254,6 +274,7 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
           idNumber: form.idNumber,
           role: form.roleId,
           department: form.departmentId,
+          subDepartment: form.subDepartmentId || null,
         }),
       });
       const data = await res.json();
@@ -316,6 +337,17 @@ function AddMemberModal({ onClose, onCreated, showToast }: AddMemberModalProps) 
             </select>
           </div>
         </div>
+        <div className="form-field">
+          <label>Sub-Department</label>
+          <select
+            value={form.subDepartmentId}
+            onChange={set("subDepartmentId")}
+            disabled={!form.departmentId}
+          >
+            <option value="">Select sub-department…</option>
+            {subDepartments.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+          </select>
+        </div>
         <div className="modal-actions">
           <button className="btn-action secondary" onClick={onClose}>Cancel</button>
           <button className="btn-action primary" onClick={handleSave} disabled={saving}>
@@ -343,9 +375,11 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
     lastName: member.lastName,
     roleId: memberAny.role?._id ?? "",
     departmentId: memberAny.department?._id ?? "",
+    subDepartmentId: memberAny.subDepartment?._id ?? "",
   });
   const [roles, setRoles] = useState<{ _id: string; title: string }[]>([]);
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
+  const [subDepartments, setSubDepartments] = useState<{ _id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -358,8 +392,27 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
     });
   }, []);
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  useEffect(() => {
+    if (!form.departmentId) {
+      setSubDepartments([]);
+      return;
+    }
+
+    fetch(`/api/admin/sub-departments?departmentId=${form.departmentId}`)
+      .then((r) => r.json())
+      .then((data) => setSubDepartments(data.subDepartments ?? []))
+      .catch(() => setSubDepartments([]));
+  }, [form.departmentId]);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const value = e.target.value;
+    setForm((f) => {
+      if (k === "departmentId") {
+        return { ...f, departmentId: value, subDepartmentId: "" };
+      }
+      return { ...f, [k]: value };
+    });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -370,8 +423,12 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
       };
       const currentRoleId = memberAny.role?._id ?? "";
       const currentDeptId = memberAny.department?._id ?? "";
+      const currentSubDeptId = memberAny.subDepartment?._id ?? "";
       if (form.roleId && form.roleId !== currentRoleId) updateData.role = form.roleId;
       if (form.departmentId && form.departmentId !== currentDeptId) updateData.department = form.departmentId;
+      if (form.subDepartmentId !== currentSubDeptId) {
+        updateData.subDepartment = form.subDepartmentId || null;
+      }
 
       const res = await fetch(`/api/admin/members/${member._id}`, {
         method: "PATCH",
@@ -423,6 +480,17 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
               {departments.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
             </select>
           </div>
+        </div>
+        <div className="form-field">
+          <label>Sub-Department</label>
+          <select
+            value={form.subDepartmentId}
+            onChange={set("subDepartmentId")}
+            disabled={!form.departmentId}
+          >
+            <option value="">Select sub-department…</option>
+            {subDepartments.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+          </select>
         </div>
         <div className="modal-actions">
           <button className="btn-action secondary" onClick={onClose}>Cancel</button>

@@ -74,8 +74,44 @@ export async function PATCH(
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    const { connectDB, User } = require("@/database");
+    const { connectDB, User, SubDepartment } = require("@/database");
     await connectDB();
+
+    const currentUser = await User.findById(params.id).select("department subDepartment").lean();
+    if (!currentUser) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+    const effectiveDepartment = ("department" in update)
+      ? (update.department as string | null)
+      : (currentUser.department ? currentUser.department.toString() : null);
+
+    if ("subDepartment" in update) {
+      const nextSubDept = update.subDepartment as string | null;
+      if (!nextSubDept) {
+        update.subDepartment = null;
+      } else {
+        if (!effectiveDepartment) {
+          return NextResponse.json(
+            { error: "Department is required when assigning a sub-department" },
+            { status: 400 }
+          );
+        }
+        const subDeptDoc = await SubDepartment.findOne({
+          _id: nextSubDept,
+          department: effectiveDepartment,
+        }).lean();
+        if (!subDeptDoc) {
+          return NextResponse.json(
+            { error: "Selected sub-department does not belong to the chosen department" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // If department changes and subDepartment was not explicitly changed, clear stale assignment.
+    if ("department" in update && !("subDepartment" in update)) {
+      update.subDepartment = null;
+    }
 
     const updated = await User.findByIdAndUpdate(
       params.id,
