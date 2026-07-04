@@ -58,6 +58,7 @@ const STYLES = `
 .dl-pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:600; }
 .dl-pill-open { background:#d1fae5; color:#065f46; }
 .dl-pill-closed { background:#fee2e2; color:#991b1b; }
+.dl-pill-archived { background:#e5e7eb; color:#374151; }
 .dl-actions { display:flex; align-items:center; gap:10px; }
 .dl-input { padding:9px 13px; border-radius:8px; border:1px solid var(--border-color); font-size:13px; outline:none; background:#fff; }
 .dl-input:focus { border-color:var(--primary-blue); }
@@ -84,6 +85,13 @@ interface Cycle {
   periodMonth: string
   periodYear: number
   submissionDeadline: string
+  isManuallyClosed?: boolean
+  isArchived?: boolean
+  archivedAt?: string | null
+  closedAt?: string | null
+  isDeadlineClosed?: boolean
+  canExtend?: boolean
+  isPastPeriod?: boolean
   isOpen: boolean
 }
 
@@ -107,6 +115,11 @@ export default function DeadlineManagementPage() {
   const [adjustingId, setAdjustingId]     = useState<string | null>(null)
   const [adjustDeadline, setAdjustDeadline] = useState("")
   const [adjusting, setAdjusting]         = useState(false)
+  const [closingId, setClosingId]         = useState<string | null>(null)
+  const [openingId, setOpeningId]         = useState<string | null>(null)
+  const [extendingId, setExtendingId]     = useState<string | null>(null)
+  const [extendDeadline, setExtendDeadline] = useState("")
+  const [extending, setExtending]         = useState(false)
 
   const todayLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric", year: "numeric",
@@ -174,6 +187,83 @@ export default function DeadlineManagementPage() {
       }
     } catch { setErrorMsg("Failed to update deadline.") }
     finally { setAdjusting(false) }
+  }
+
+  async function handleClose(cycleId: string) {
+    const confirmed = window.confirm(
+      "Close this cycle now? Members will no longer be allowed to submit or edit entries for this cycle."
+    )
+    if (!confirmed) return
+
+    setErrorMsg("")
+    setSuccessMsg("")
+    setClosingId(cycleId)
+    try {
+      const res = await fetch(`/api/cycles/${cycleId}/close`, {
+        method: "PATCH",
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to close cycle.")
+      } else {
+        setCycles((prev) => prev.map((c) => (c._id === cycleId ? { ...c, ...data } : c)))
+        setSuccessMsg("Cycle closed successfully. Submissions are now locked.")
+      }
+    } catch {
+      setErrorMsg("Failed to close cycle.")
+    } finally {
+      setClosingId(null)
+    }
+  }
+
+  async function handleOpen(cycle: Cycle) {
+    setErrorMsg("")
+    setSuccessMsg("")
+    setOpeningId(cycle._id)
+
+    try {
+      const res = await fetch(`/api/cycles/${cycle._id}/open`, {
+        method: "PATCH",
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to open cycle.")
+      } else {
+        setCycles((prev) => prev.map((c) => (c._id === cycle._id ? { ...c, ...data } : c)))
+        setSuccessMsg("Cycle reopened successfully. Members can submit entries again.")
+      }
+    } catch {
+      setErrorMsg("Failed to open cycle.")
+    } finally {
+      setOpeningId(null)
+    }
+  }
+
+  async function handleExtend(cycleId: string) {
+    setErrorMsg("")
+    setSuccessMsg("")
+    setExtending(true)
+
+    try {
+      const res = await fetch(`/api/cycles/${cycleId}/extend`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionDeadline: extendDeadline }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to extend deadline.")
+      } else {
+        setCycles((prev) => prev.map((c) => (c._id === cycleId ? { ...c, ...data } : c)))
+        setSuccessMsg("Deadline extended successfully. Submissions are allowed again.")
+        setExtendingId(null)
+        setExtendDeadline("")
+      }
+    } catch {
+      setErrorMsg("Failed to extend deadline.")
+    } finally {
+      setExtending(false)
+    }
   }
 
   const formatDeadline = (iso: string) =>
@@ -342,22 +432,83 @@ export default function DeadlineManagementPage() {
                         <div className="dl-cycle-deadline">
                           Deadline: {formatDeadline(cycle.submissionDeadline)}
                         </div>
+                        {!cycle.isOpen && cycle.closedAt && (
+                          <div className="dl-cycle-deadline">
+                            Closed on: {formatDeadline(cycle.closedAt)}
+                          </div>
+                        )}
+                        {cycle.isArchived && cycle.archivedAt && (
+                          <div className="dl-cycle-deadline">
+                            Archived on: {formatDeadline(cycle.archivedAt)}
+                          </div>
+                        )}
                       </div>
                       <div className="dl-actions">
-                        <span className={`dl-pill ${cycle.isOpen ? "dl-pill-open" : "dl-pill-closed"}`}>
-                          {cycle.isOpen ? "Open" : "Closed"}
+                        <span className={`dl-pill ${cycle.isArchived ? "dl-pill-archived" : cycle.isOpen ? "dl-pill-open" : "dl-pill-closed"}`}>
+                          {cycle.isArchived ? "Archived" : cycle.isOpen ? "Open" : "Closed"}
                         </span>
-                        <button
-                          className="dl-btn dl-btn-secondary"
-                          style={{ fontSize: 13, padding: "7px 14px" }}
-                          onClick={() => {
-                            setAdjustingId(cycle._id)
-                            setAdjustDeadline("")
-                            setErrorMsg(""); setSuccessMsg("")
-                          }}
-                        >
-                          Adjust Deadline
-                        </button>
+                        {cycle.isOpen && (
+                          <button
+                            className="dl-btn"
+                            style={{
+                              fontSize: 13,
+                              padding: "7px 14px",
+                              background: "var(--danger-red)",
+                              color: "#fff",
+                            }}
+                            disabled={closingId === cycle._id}
+                            onClick={() => handleClose(cycle._id)}
+                          >
+                            {closingId === cycle._id ? <><span className="dl-spinner" />Closing…</> : "Close Cycle"}
+                          </button>
+                        )}
+                        {!cycle.isOpen && !!cycle.isManuallyClosed && !cycle.isPastPeriod && (
+                          <button
+                            className="dl-btn"
+                            style={{
+                              fontSize: 13,
+                              padding: "7px 14px",
+                              background: "var(--success-green)",
+                              color: "#fff",
+                            }}
+                            disabled={openingId === cycle._id}
+                            onClick={() => handleOpen(cycle)}
+                          >
+                            {openingId === cycle._id ? <><span className="dl-spinner" />Opening…</> : "Open Cycle"}
+                          </button>
+                        )}
+                        {!!cycle.canExtend && (
+                          <button
+                            className="dl-btn"
+                            style={{
+                              fontSize: 13,
+                              padding: "7px 14px",
+                              background: "var(--warning-yellow)",
+                              color: "#fff",
+                            }}
+                            onClick={() => {
+                              setExtendingId(cycle._id)
+                              setExtendDeadline("")
+                              setErrorMsg("")
+                              setSuccessMsg("")
+                            }}
+                          >
+                            Extend Deadline
+                          </button>
+                        )}
+                        {cycle.isOpen && (
+                          <button
+                            className="dl-btn dl-btn-secondary"
+                            style={{ fontSize: 13, padding: "7px 14px" }}
+                            onClick={() => {
+                              setAdjustingId(cycle._id)
+                              setAdjustDeadline("")
+                              setErrorMsg(""); setSuccessMsg("")
+                            }}
+                          >
+                            Adjust Deadline
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -384,6 +535,36 @@ export default function DeadlineManagementPage() {
                         <button
                           className="dl-btn dl-btn-secondary"
                           onClick={() => { setAdjustingId(null); setAdjustDeadline("") }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Inline extend form */}
+                    {extendingId === cycle._id && (
+                      <div style={{ padding: "16px 24px", background: "#fff7ed", borderTop: "1px solid var(--border-color)", display: "flex", alignItems: "flex-end", gap: 12 }}>
+                        <div>
+                          <label className="dl-form-label">Extended Deadline (future date required)</label>
+                          <input
+                            className="dl-input"
+                            type="datetime-local"
+                            min={minDateTime()}
+                            value={extendDeadline}
+                            onChange={(e) => setExtendDeadline(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          className="dl-btn"
+                          style={{ background: "var(--warning-yellow)", color: "#fff" }}
+                          onClick={() => handleExtend(cycle._id)}
+                          disabled={extending || !extendDeadline}
+                        >
+                          {extending ? <><span className="dl-spinner" />Saving…</> : "Save Extension"}
+                        </button>
+                        <button
+                          className="dl-btn dl-btn-secondary"
+                          onClick={() => { setExtendingId(null); setExtendDeadline("") }}
                         >
                           Cancel
                         </button>

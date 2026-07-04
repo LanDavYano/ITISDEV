@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+const MS_3_DAYS = 3 * 24 * 60 * 60 * 1000
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -12,11 +13,11 @@ function withState(cycle: any) {
   const deadline = new Date(cycle.submissionDeadline)
   const isOpen = !cycle.isArchived && !cycle.isManuallyClosed && now <= deadline
   const isDeadlineClosed = !cycle.isArchived && !cycle.isManuallyClosed && now > deadline
-  const canExtend = isDeadlineClosed && now.getTime() <= deadline.getTime() + 3 * 24 * 60 * 60 * 1000
+  const canExtend = isDeadlineClosed && now.getTime() <= deadline.getTime() + MS_3_DAYS
   return { ...cycle.toObject(), isOpen, isDeadlineClosed, canExtend }
 }
 
-// APMP-60: Adjust deadline — APMP-61: reject past dates — APMP-63: re-enables editing if extended
+// Extends a deadline-closed cycle only within 3 days after deadline.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions)
@@ -29,7 +30,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Invalid deadline format" }, { status: 400 })
     }
 
-    // APMP-61: Cannot set a past date
     if (newDeadline <= new Date()) {
       return NextResponse.json({ error: "Deadline must be a future date" }, { status: 400 })
     }
@@ -40,28 +40,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const EvaluationCycle = require("@/database/EvaluationCycle")
 
     await connectDB()
-    const cycle = await EvaluationCycle.findById(params.id)
 
+    const cycle = await EvaluationCycle.findById(params.id)
     if (!cycle) return NextResponse.json({ error: "Cycle not found" }, { status: 404 })
 
     if (cycle.isArchived) {
-      return NextResponse.json({ error: "Archived cycles cannot be adjusted" }, { status: 400 })
+      return NextResponse.json({ error: "Cycle is archived and can no longer be extended" }, { status: 400 })
     }
 
-    // Deadline-closed cycles must use /extend within the 3-day window.
-    if (!cycle.isManuallyClosed && new Date() > new Date(cycle.submissionDeadline)) {
+    if (cycle.isManuallyClosed) {
+      return NextResponse.json({ error: "Manually closed cycles should be reopened, not extended" }, { status: 400 })
+    }
+
+    const now = new Date()
+    const currentDeadline = new Date(cycle.submissionDeadline)
+
+    if (now <= currentDeadline) {
+      return NextResponse.json({ error: "Cycle is still open. Use adjust deadline instead." }, { status: 400 })
+    }
+
+    if (now.getTime() > currentDeadline.getTime() + MS_3_DAYS) {
+      cycle.isArchived = true
+      cycle.archivedAt = now
+      await cycle.save()
       return NextResponse.json(
-        { error: "Cycle is closed by deadline. Use extend option within 3 days." },
+        { error: "3-day extension window has passed. Cycle was archived." },
         { status: 400 }
       )
     }
 
-    const targetMonth = MONTHS[newDeadline.getMonth()]
-    const targetYear = newDeadline.getFullYear()
-
     cycle.submissionDeadline = newDeadline
-    cycle.periodMonth = targetMonth
-    cycle.periodYear = targetYear
+    cycle.periodMonth = MONTHS[newDeadline.getMonth()]
+    cycle.periodYear = newDeadline.getFullYear()
     await cycle.save()
 
     return NextResponse.json(withState(cycle))
@@ -69,6 +79,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (error.code === 11000) {
       return NextResponse.json({ error: "A cycle for this period already exists" }, { status: 409 })
     }
-    return NextResponse.json({ error: "Failed to update deadline" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to extend deadline" }, { status: 500 })
   }
 }

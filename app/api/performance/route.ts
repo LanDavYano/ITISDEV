@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+function isCycleOpen(cycle: any) {
+  if (cycle.isArchived) return false
+  if (cycle.isManuallyClosed) return false
+  return new Date() <= new Date(cycle.submissionDeadline)
+}
+
 // APMP-62: Block new submissions after deadline
 export async function POST(req: NextRequest) {
   try {
@@ -20,9 +26,8 @@ export async function POST(req: NextRequest) {
     const cycle = await EvaluationCycle.findOne().sort({ periodYear: -1, submissionDeadline: -1 })
     if (!cycle) return NextResponse.json({ error: "No active cycle found" }, { status: 404 })
 
-    // APMP-62: Deadline passed — block new submissions
-    if (new Date() > new Date(cycle.submissionDeadline)) {
-      return NextResponse.json({ error: "Submission deadline has passed. New entries are not allowed." }, { status: 403 })
+    if (!isCycleOpen(cycle)) {
+      return NextResponse.json({ error: "This cycle is closed. New entries are not allowed." }, { status: 403 })
     }
 
     const body = await req.json()
