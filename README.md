@@ -13,9 +13,14 @@ Initial repo for all ITISDEV deliverables
 - JavaScript
 - TypeScript
 - Next.js
-- SQL  
+- MongoDB
 
 # Instructions to run
+## Install Database Dependencies 
+  - MongoDB Compass
+  - MongoDB Community Server
+  https://www.mongodb.com/products/self-managed/community-edition
+  
 ## Seed Database
   - npm run seed
   - npm run db:check
@@ -25,3 +30,4 @@ Initial repo for all ITISDEV deliverables
 
 ## Run the local production build
   - npm run dev
+  - open localhost
