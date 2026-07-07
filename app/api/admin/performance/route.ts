@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getCurrentCycle } from "@/lib/performance"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -17,9 +18,7 @@ export async function GET() {
     await connectDB()
 
     // Get the most recent cycle (open or closed)
-    const cycle = await EvaluationCycle.findOne()
-      .sort({ submissionDeadline: -1 })
-      .lean()
+    const cycle = await getCurrentCycle()
 
     if (!cycle) return NextResponse.json({})
 

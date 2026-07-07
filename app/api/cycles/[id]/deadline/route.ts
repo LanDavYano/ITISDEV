@@ -59,6 +59,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const targetMonth = MONTHS[newDeadline.getMonth()]
     const targetYear = newDeadline.getFullYear()
 
+    const conflictingCycle = await EvaluationCycle.findOne({
+      _id: { $ne: cycle._id },
+      periodMonth: targetMonth,
+      periodYear: targetYear,
+      isArchived: false,
+    })
+
+    if (conflictingCycle) {
+      return NextResponse.json({ error: "A cycle for this period already exists" }, { status: 409 })
+    }
+
     cycle.submissionDeadline = newDeadline
     cycle.periodMonth = targetMonth
     cycle.periodYear = targetYear

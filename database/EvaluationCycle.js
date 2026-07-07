@@ -31,11 +31,14 @@ const evaluationCycleSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, autoIndex: false }
 )
 
-// One cycle per period
-evaluationCycleSchema.index({ periodYear: 1, periodMonth: 1 }, { unique: true })
+// One active cycle per period; archived cycles stay in history without blocking new ones.
+evaluationCycleSchema.index(
+  { periodYear: 1, periodMonth: 1 },
+  { unique: true, partialFilterExpression: { isArchived: false } }
+)
 
 // Virtual: cycle is open when it is not manually closed and deadline is still in the future.
 evaluationCycleSchema.virtual("isOpen").get(function () {
@@ -47,8 +50,24 @@ evaluationCycleSchema.virtual("isOpen").get(function () {
 evaluationCycleSchema.set("toJSON",   { virtuals: true })
 evaluationCycleSchema.set("toObject", { virtuals: true })
 
-module.exports =
+const EvaluationCycle =
   mongoose.models.EvaluationCycle ||
   mongoose.model("EvaluationCycle", evaluationCycleSchema)
 
+let indexSyncPromise = null
+
+async function ensureIndexes() {
+  if (!indexSyncPromise) {
+    indexSyncPromise = EvaluationCycle.syncIndexes().catch((error) => {
+      indexSyncPromise = null
+      throw error
+    })
+  }
+
+  return indexSyncPromise
+}
+
+EvaluationCycle.ensureIndexes = ensureIndexes
+
+module.exports = EvaluationCycle
 module.exports.MONTHS = MONTHS

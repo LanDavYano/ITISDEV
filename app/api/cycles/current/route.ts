@@ -61,7 +61,7 @@ export async function GET() {
     )
 
     const cycle = await EvaluationCycle.findOne()
-      .sort({ periodYear: -1, submissionDeadline: -1 })
+      .sort({ createdAt: -1, updatedAt: -1 })
       .lean()
 
     if (!cycle) return NextResponse.json(null)
