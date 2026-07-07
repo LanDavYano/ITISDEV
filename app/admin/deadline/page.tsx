@@ -98,6 +98,7 @@ interface Cycle {
 export default function DeadlineManagementPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  const isDeptLeader = (session?.user as any)?.roleLevel >= 3
 
   const [cycles, setCycles]               = useState<Cycle[]>([])
   const [loading, setLoading]             = useState(true)
@@ -133,8 +134,14 @@ export default function DeadlineManagementPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
-    if (status === "authenticated") fetchCycles()
-  }, [status])
+    if (status === "authenticated") {
+      if (!isDeptLeader) {
+        router.replace("/admin")
+        return
+      }
+      fetchCycles()
+    }
+  }, [status, isDeptLeader, router])
 
   async function fetchCycles() {
     setLoading(true)
@@ -272,7 +279,7 @@ export default function DeadlineManagementPage() {
       hour: "2-digit", minute: "2-digit",
     })
 
-  if (status === "loading") return null
+  if (status === "loading" || (status === "authenticated" && !isDeptLeader)) return null
 
   return (
     <div className="dl-root">
@@ -354,6 +361,9 @@ export default function DeadlineManagementPage() {
               </li>
               <li className="dl-menu-item active">
                 Deadline Management
+              </li>
+              <li className="dl-menu-item" onClick={() => router.push("/team") }>
+                Team Records
               </li>
             </ul>
           </div>

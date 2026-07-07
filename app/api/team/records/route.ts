@@ -8,8 +8,7 @@ import { getCurrentCycle, cycleSummary } from "@/lib/performance"
  * cycle: every member of their sub-department with that member's performance
  * record (or null if none exists yet).
  *
- * Access: roleLevel 2 (Team Leader — own sub-department only) and
- *         roleLevel 3 (Leader of Department — all members).
+ * Access: roleLevel 2+ with sub-department scoping to the viewer's own team.
  */
 export async function GET() {
   try {
@@ -25,14 +24,13 @@ export async function GET() {
 
     const cycle = await getCurrentCycle()
 
-    // Scope: team leaders see their own sub-department; dept leaders see everyone.
+    // Scope everyone with a sub-department to their own team.
     const me = await User.findById(session.user.id).select("subDepartment")
     const memberFilter: Record<string, any> = {}
-    if (session.user.roleLevel === 2) {
-      if (!me?.subDepartment) {
-        return NextResponse.json({ cycle: cycleSummary(cycle), team: [] })
-      }
+    if (me?.subDepartment) {
       memberFilter.subDepartment = me.subDepartment
+    } else if ((session.user.roleLevel ?? 1) === 2) {
+      return NextResponse.json({ cycle: cycleSummary(cycle), team: [] })
     }
 
     const members = await User.find(memberFilter)

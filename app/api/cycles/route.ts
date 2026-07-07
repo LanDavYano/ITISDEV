@@ -98,6 +98,17 @@ export async function POST(req: NextRequest) {
     const EvaluationCycle = require("@/database/EvaluationCycle")
 
     await connectDB()
+
+    const existingCycle = await EvaluationCycle.findOne({
+      periodMonth,
+      periodYear,
+      isArchived: false,
+    })
+
+    if (existingCycle) {
+      return NextResponse.json({ error: "A cycle for this period already exists" }, { status: 409 })
+    }
+
     const cycle = await EvaluationCycle.create({
       periodMonth,
       periodYear,

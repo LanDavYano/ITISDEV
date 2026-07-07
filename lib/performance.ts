@@ -11,11 +11,11 @@ export function isCycleOpen(cycle: any): boolean {
   return new Date() <= new Date(cycle.submissionDeadline)
 }
 
-/** The current cycle = most recent one (same convention as /api/cycles/current). */
+/** The current cycle = most recently created one (same convention as /api/cycles/current). */
 export async function getCurrentCycle() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { EvaluationCycle } = require("@/database")
-  return EvaluationCycle.findOne().sort({ periodYear: -1, submissionDeadline: -1 })
+  return EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
 }
 
 /** Serialize a cycle for API responses with its computed open/locked state. */
