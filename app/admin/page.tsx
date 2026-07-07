@@ -56,6 +56,12 @@ interface Submission {
   cycle: string;
 }
 
+interface KpiItem {
+  _id?: string;
+  name: string;
+  weight: number;
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const STYLES = `
@@ -503,6 +509,113 @@ function EditMemberModal({ member, onClose, onUpdated, showToast }: EditMemberMo
   );
 }
 
+// ─── KPI Configuration Modal ───────────────────────────────────────────────
+
+interface KpiConfigModalProps {
+  mode: "add" | "edit";
+  initialKpis: KpiItem[];
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+function KpiConfigModal({ mode, initialKpis, onClose, onSaved, showToast }: KpiConfigModalProps) {
+  const [draft, setDraft] = useState<{ name: string; weight: string }[]>(() =>
+    mode === "add"
+      ? [...initialKpis.map((kpi) => ({ name: kpi.name, weight: String(kpi.weight) })), { name: "", weight: "" }]
+      : initialKpis.map((kpi) => ({ name: kpi.name, weight: String(kpi.weight) }))
+  );
+  const [saving, setSaving] = useState(false);
+
+  const updateRow = (index: number, field: "name" | "weight", value: string) => {
+    setDraft((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+  };
+
+  const addRow = () => {
+    setDraft((prev) => [...prev, { name: "", weight: "" }]);
+  };
+
+  const handleSave = async () => {
+    const trimmed = draft.map((row) => ({ name: row.name.trim(), weight: Number(row.weight) }));
+    const invalidNames = trimmed.some((row) => !row.name);
+    const invalidWeights = trimmed.some((row) => !Number.isFinite(row.weight) || row.weight <= 0);
+    const total = trimmed.reduce((sum, row) => sum + (Number.isFinite(row.weight) ? row.weight : 0), 0);
+
+    if (invalidNames || invalidWeights) {
+      showToast("Each KPI needs a non-empty name and a positive weight.", "error");
+      return;
+    }
+
+    if (Math.abs(total - 100) > 0.001) {
+      showToast("KPI weights must add up to 100%.", "error");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/performance/kpis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kpis: trimmed }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Failed to save KPI configuration");
+      showToast(mode === "add" ? "KPI added successfully." : "KPIs updated successfully.", "success");
+      onSaved();
+      onClose();
+    } catch (error: unknown) {
+      showToast((error as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">{mode === "add" ? "Add KPI" : "Edit KPI Weights"}</div>
+        <p style={{ fontSize: 13, color: "var(--text-sub)", marginBottom: 16 }}>
+          Update each KPI name and weight. The total must remain 100% before saving.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {draft.map((row, index) => (
+            <div key={`${row.name}-${index}`} className="form-row" style={{ marginBottom: 0 }}>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label>KPI Name</label>
+                <input
+                  value={row.name}
+                  onChange={(e) => updateRow(index, "name", e.target.value)}
+                  placeholder={index === draft.length - 1 && mode === "add" ? "New KPI name" : "KPI name"}
+                />
+              </div>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label>Weight (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={row.weight}
+                  onChange={(e) => updateRow(index, "weight", e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+          <button className="btn-action secondary" onClick={addRow}>+ Add Another KPI</button>
+          <div className="modal-actions" style={{ marginTop: 0 }}>
+            <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-action primary" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save KPIs"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -522,8 +635,12 @@ export default function AdminPage() {
   const [editingMember, setEditingMember]   = useState<PopulatedMember | null>(null);
   const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg]     = useState("");
-  const [activeTab, setActiveTab]           = useState<"dashboard" | "members">("dashboard");
+  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi">("dashboard");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [kpis, setKpis] = useState<KpiItem[]>([]);
+  const [loadingKpis, setLoadingKpis] = useState(false);
+  const [showKpiModal, setShowKpiModal] = useState(false);
+  const [kpiModalMode, setKpiModalMode] = useState<"add" | "edit">("add");
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [filterDept, setFilterDept] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -617,6 +734,23 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchKpis = useCallback(async () => {
+    setLoadingKpis(true);
+    try {
+      const res = await fetch("/api/performance/kpis");
+      const data = await res.json();
+      if (res.ok) {
+        setKpis(data.kpis ?? []);
+      } else {
+        setKpis([]);
+      }
+    } catch {
+      setKpis([]);
+    } finally {
+      setLoadingKpis(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
@@ -624,8 +758,9 @@ export default function AdminPage() {
       fetchStats();
       fetchCycleAndPerf();
       fetchSubmissions();
+      fetchKpis();
     }
-  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis]);
 
   const currentCycleLabel = currentCycle ? `${currentCycle.periodMonth} ${currentCycle.periodYear}` : "No active cycle";
 
@@ -688,6 +823,15 @@ export default function AdminPage() {
           showToast={showToast}
         />
       )}
+      {showKpiModal && (
+        <KpiConfigModal
+          mode={kpiModalMode}
+          initialKpis={kpis}
+          onClose={() => setShowKpiModal(false)}
+          onSaved={() => fetchKpis()}
+          showToast={showToast}
+        />
+      )}
 
       <div className="admin-app">
         {/* ── Sidebar ── */}
@@ -708,6 +852,12 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("members")}
               >
                 Member Management
+              </li>
+              <li
+                className={`menu-item${activeTab === "kpi" ? " active" : ""}`}
+                onClick={() => setActiveTab("kpi")}
+              >
+                KPI Configuration
               </li>
               <li
                 className="menu-item"
@@ -764,7 +914,11 @@ export default function AdminPage() {
               <div>
                 <div className="body-date">{todayLabel}</div>
                 <h1 className="body-greeting">
-                  {activeTab === "dashboard" ? "LC Dashboard." : "LC Member Management."}
+                  {activeTab === "dashboard"
+                    ? "LC Dashboard."
+                    : activeTab === "members"
+                      ? "LC Member Management."
+                      : "KPI Configuration."}
                 </h1>
               </div>
               <div className="intro-actions">
@@ -795,6 +949,28 @@ export default function AdminPage() {
                   >
                     Manage Deadlines
                   </button>
+                )}
+                {activeTab === "kpi" && (
+                  <>
+                    <button
+                      className="btn-action secondary"
+                      onClick={() => {
+                        setKpiModalMode("edit");
+                        setShowKpiModal(true);
+                      }}
+                    >
+                      Edit KPIs
+                    </button>
+                    <button
+                      className="btn-action primary"
+                      onClick={() => {
+                        setKpiModalMode("add");
+                        setShowKpiModal(true);
+                      }}
+                    >
+                      + Add KPI
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -1127,6 +1303,70 @@ export default function AdminPage() {
                   </div>
                 </div>
               </>
+            )}
+
+            {activeTab === "kpi" && (
+              <div className="content-table">
+                <div className="table-header">
+                  <div>
+                    <h2 className="table-title">KPI Configuration</h2>
+                    <p style={{ fontSize: 13, color: "var(--text-sub)", marginTop: 4 }}>
+                      Each KPI is stored on the current user&apos;s performance record and weights must total 100%.
+                    </p>
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      className="btn-action secondary"
+                      onClick={() => {
+                        setKpiModalMode("edit");
+                        setShowKpiModal(true);
+                      }}
+                    >
+                      Edit KPIs
+                    </button>
+                    <button
+                      className="btn-action primary"
+                      onClick={() => {
+                        setKpiModalMode("add");
+                        setShowKpiModal(true);
+                      }}
+                    >
+                      + Add KPI
+                    </button>
+                  </div>
+                </div>
+
+                {loadingKpis ? (
+                  <div className="loading-shimmer" style={{ width: "100%", height: 120 }} />
+                ) : kpis.length === 0 ? (
+                  <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
+                    No KPI configuration exists yet. Add the default set to begin.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {kpis.map((kpi, index) => (
+                      <div
+                        key={`${kpi.name}-${index}`}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "14px 16px",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: 10,
+                          background: "var(--bg-main)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{kpi.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-sub)" }}>Weighted KPI</div>
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 16 }}>{kpi.weight}%</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </main>
