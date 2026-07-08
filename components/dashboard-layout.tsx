@@ -12,11 +12,12 @@ import {
 } from "lucide-react"
 
 const NAV_ITEMS = [
-  { label: "LC Dashboard",    Icon: LayoutDashboard, href: "/dashboard" },
-  { label: "EXPA Leads",      Icon: Globe,           href: "/expa-leads" },
-  { label: "My Deliverables", Icon: ListChecks,      href: "/my-task" },
-  { label: "EB Updates",      Icon: MessageSquare,   href: "/chats" },
-  { label: "Toolkits & Hub",  Icon: FileText,        href: "/documents" },
+  { label: "LC Dashboard",      Icon: LayoutDashboard, href: "/dashboard" },
+  { label: "Rating Submission", Icon: ListChecks,      href: "/performance" },
+  { label: "EXPA Leads",        Icon: Globe,           href: "/expa-leads" },
+  { label: "My Deliverables",   Icon: ListChecks,      href: "/my-task" },
+  { label: "EB Updates",        Icon: MessageSquare,   href: "/chats" },
+  { label: "Toolkits & Hub",    Icon: FileText,        href: "/documents" },
 ]
 
 const BOTTOM_NAV = [
