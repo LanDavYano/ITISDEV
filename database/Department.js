@@ -27,6 +27,18 @@ const departmentSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    // Informational only — not enforced when assigning members.
+    memberCapacity: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
   },
   { timestamps: true }
 )
