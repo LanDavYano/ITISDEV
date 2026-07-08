@@ -62,6 +62,27 @@ interface KpiItem {
   weight: number;
 }
 
+interface DepartmentItem {
+  _id: string;
+  name: string;
+  officeType: "Front Office" | "Back Office";
+  description: string;
+  memberCapacity: number | null;
+  memberCount: number;
+  subDepartmentCount: number;
+  deptLeader: { _id: string; firstName: string; lastName: string } | null;
+}
+
+interface SubDepartmentItem {
+  _id: string;
+  name: string;
+  department: { _id: string; name: string } | null;
+  description: string;
+  memberCapacity: number | null;
+  memberCount: number;
+  subDeptLeader: { _id: string; firstName: string; lastName: string } | null;
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const STYLES = `
@@ -616,6 +637,228 @@ function KpiConfigModal({ mode, initialKpis, onClose, onSaved, showToast }: KpiC
   );
 }
 
+// ─── Department Modal ──────────────────────────────────────────────────────
+
+interface DepartmentModalProps {
+  mode: "add" | "edit";
+  department?: DepartmentItem;
+  members: { _id: string; firstName: string; lastName: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+function DepartmentModal({ mode, department, members, onClose, onSaved, showToast }: DepartmentModalProps) {
+  const [form, setForm] = useState({
+    name: department?.name ?? "",
+    officeType: department?.officeType ?? "Front Office",
+    description: department?.description ?? "",
+    memberCapacity: department?.memberCapacity != null ? String(department.memberCapacity) : "",
+    deptLeaderId: department?.deptLeader?._id ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      showToast("Department name is required.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: form.name.trim(),
+        officeType: form.officeType,
+        description: form.description.trim(),
+        memberCapacity: form.memberCapacity === "" ? null : Number(form.memberCapacity),
+        deptLeader: form.deptLeaderId || null,
+      };
+      const res = await fetch(
+        mode === "add" ? "/api/admin/departments" : `/api/admin/departments/${department?._id}`,
+        {
+          method: mode === "add" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save department");
+      showToast(mode === "add" ? "Department created." : "Department updated.", "success");
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">{mode === "add" ? "Add Department" : "Edit Department"}</div>
+        <div className="form-field">
+          <label>Name</label>
+          <input value={form.name} onChange={set("name")} placeholder="e.g. Talent Management" />
+        </div>
+        <div className="form-row">
+          <div className="form-field">
+            <label>Office Type</label>
+            <select value={form.officeType} onChange={set("officeType")}>
+              <option value="Front Office">Front Office</option>
+              <option value="Back Office">Back Office</option>
+            </select>
+          </div>
+          <div className="form-field">
+            <label>Member Capacity</label>
+            <input type="number" min="0" value={form.memberCapacity} onChange={set("memberCapacity")} placeholder="Optional" />
+          </div>
+        </div>
+        <div className="form-field">
+          <label>Department Leader</label>
+          <select value={form.deptLeaderId} onChange={set("deptLeaderId")}>
+            <option value="">None</option>
+            {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName}</option>)}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Description</label>
+          <textarea
+            value={form.description}
+            onChange={set("description")}
+            placeholder="What this department is responsible for…"
+            style={{ padding: "9px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", minHeight: 70 }}
+          />
+        </div>
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-action primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : mode === "add" ? "Add Department" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-Department Modal ──────────────────────────────────────────────────
+
+interface SubDepartmentModalProps {
+  mode: "add" | "edit";
+  subDepartment?: SubDepartmentItem;
+  departments: DepartmentItem[];
+  members: { _id: string; firstName: string; lastName: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+function SubDepartmentModal({ mode, subDepartment, departments, members, onClose, onSaved, showToast }: SubDepartmentModalProps) {
+  const [form, setForm] = useState({
+    name: subDepartment?.name ?? "",
+    departmentId: subDepartment?.department?._id ?? "",
+    description: subDepartment?.description ?? "",
+    memberCapacity: subDepartment?.memberCapacity != null ? String(subDepartment.memberCapacity) : "",
+    subDeptLeaderId: subDepartment?.subDeptLeader?._id ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      showToast("Sub-department name is required.", "error");
+      return;
+    }
+    if (mode === "add" && !form.departmentId) {
+      showToast("Select a parent department.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        memberCapacity: form.memberCapacity === "" ? null : Number(form.memberCapacity),
+        subDeptLeader: form.subDeptLeaderId || null,
+      };
+      if (mode === "add") body.department = form.departmentId;
+
+      const res = await fetch(
+        mode === "add" ? "/api/admin/sub-departments" : `/api/admin/sub-departments/${subDepartment?._id}`,
+        {
+          method: mode === "add" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save sub-department");
+      showToast(mode === "add" ? "Sub-department created." : "Sub-department updated.", "success");
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">{mode === "add" ? "Add Sub-Department" : "Edit Sub-Department"}</div>
+        <div className="form-field">
+          <label>Name</label>
+          <input value={form.name} onChange={set("name")} placeholder="e.g. Incoming Global Volunteer" />
+        </div>
+        <div className="form-field">
+          <label>Parent Department</label>
+          <select value={form.departmentId} onChange={set("departmentId")} disabled={mode === "edit"}>
+            <option value="">Select department…</option>
+            {departments.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
+          </select>
+        </div>
+        <div className="form-row">
+          <div className="form-field">
+            <label>Member Capacity</label>
+            <input type="number" min="0" value={form.memberCapacity} onChange={set("memberCapacity")} placeholder="Optional" />
+          </div>
+          <div className="form-field">
+            <label>Sub-Department Leader</label>
+            <select value={form.subDeptLeaderId} onChange={set("subDeptLeaderId")}>
+              <option value="">None</option>
+              {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-field">
+          <label>Description</label>
+          <textarea
+            value={form.description}
+            onChange={set("description")}
+            placeholder="What this sub-department is responsible for…"
+            style={{ padding: "9px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", minHeight: 70 }}
+          />
+        </div>
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-action primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : mode === "add" ? "Add Sub-Department" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -635,7 +878,7 @@ export default function AdminPage() {
   const [editingMember, setEditingMember]   = useState<PopulatedMember | null>(null);
   const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg]     = useState("");
-  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi">("dashboard");
+  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi" | "departments">("dashboard");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [kpis, setKpis] = useState<KpiItem[]>([]);
   const [loadingKpis, setLoadingKpis] = useState(false);
@@ -644,6 +887,16 @@ export default function AdminPage() {
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [filterDept, setFilterDept] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const [subDepartments, setSubDepartments] = useState<SubDepartmentItem[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [loadingSubDepartments, setLoadingSubDepartments] = useState(false);
+  const [showDeptModal, setShowDeptModal] = useState(false);
+  const [deptModalMode, setDeptModalMode] = useState<"add" | "edit">("add");
+  const [editingDept, setEditingDept] = useState<DepartmentItem | null>(null);
+  const [showSubDeptModal, setShowSubDeptModal] = useState(false);
+  const [subDeptModalMode, setSubDeptModalMode] = useState<"add" | "edit">("add");
+  const [editingSubDept, setEditingSubDept] = useState<SubDepartmentItem | null>(null);
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
 
@@ -751,6 +1004,32 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchDepartments = useCallback(async () => {
+    setLoadingDepartments(true);
+    try {
+      const res = await fetch("/api/admin/departments");
+      const data = await res.json();
+      if (res.ok) setDepartments(data.departments ?? []);
+    } catch {
+      showToast("Failed to load departments", "error");
+    } finally {
+      setLoadingDepartments(false);
+    }
+  }, [showToast]);
+
+  const fetchSubDepartments = useCallback(async () => {
+    setLoadingSubDepartments(true);
+    try {
+      const res = await fetch("/api/admin/sub-departments");
+      const data = await res.json();
+      if (res.ok) setSubDepartments(data.subDepartments ?? []);
+    } catch {
+      showToast("Failed to load sub-departments", "error");
+    } finally {
+      setLoadingSubDepartments(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
@@ -759,8 +1038,21 @@ export default function AdminPage() {
       fetchCycleAndPerf();
       fetchSubmissions();
       fetchKpis();
+      fetchDepartments();
+      fetchSubDepartments();
     }
-  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments]);
+
+  // Lightweight polling while the Department Management tab is open so
+  // changes made from another device/session show up without a manual refresh.
+  useEffect(() => {
+    if (activeTab !== "departments") return;
+    const interval = setInterval(() => {
+      fetchDepartments();
+      fetchSubDepartments();
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [activeTab, fetchDepartments, fetchSubDepartments]);
 
   const currentCycleLabel = currentCycle ? `${currentCycle.periodMonth} ${currentCycle.periodYear}` : "No active cycle";
 
@@ -778,6 +1070,41 @@ export default function AdminPage() {
       showToast((err as Error).message, "error");
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handleDeleteDepartment = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? Its sub-departments will be removed and any members will be marked Unassigned.`)) return;
+    try {
+      const res = await fetch(`/api/admin/departments/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      showToast(
+        `Department removed. ${data.membersReassigned} member(s) and ${data.subDepartmentsRemoved} sub-department(s) affected.`,
+        "success"
+      );
+      fetchDepartments();
+      fetchSubDepartments();
+      fetchMembers();
+      fetchStats();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
+  const handleDeleteSubDepartment = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? Any members will be marked Unassigned.`)) return;
+    try {
+      const res = await fetch(`/api/admin/sub-departments/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      showToast(`Sub-department removed. ${data.membersReassigned} member(s) reassigned.`, "success");
+      fetchSubDepartments();
+      fetchDepartments();
+      fetchMembers();
+      fetchStats();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
     }
   };
 
@@ -832,6 +1159,27 @@ export default function AdminPage() {
           showToast={showToast}
         />
       )}
+      {showDeptModal && (
+        <DepartmentModal
+          mode={deptModalMode}
+          department={deptModalMode === "edit" ? editingDept ?? undefined : undefined}
+          members={members}
+          onClose={() => { setShowDeptModal(false); setEditingDept(null); }}
+          onSaved={() => fetchDepartments()}
+          showToast={showToast}
+        />
+      )}
+      {showSubDeptModal && (
+        <SubDepartmentModal
+          mode={subDeptModalMode}
+          subDepartment={subDeptModalMode === "edit" ? editingSubDept ?? undefined : undefined}
+          departments={departments}
+          members={members}
+          onClose={() => { setShowSubDeptModal(false); setEditingSubDept(null); }}
+          onSaved={() => { fetchSubDepartments(); fetchDepartments(); }}
+          showToast={showToast}
+        />
+      )}
 
       <div className="admin-app">
         {/* ── Sidebar ── */}
@@ -858,6 +1206,12 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("kpi")}
               >
                 KPI Configuration
+              </li>
+              <li
+                className={`menu-item${activeTab === "departments" ? " active" : ""}`}
+                onClick={() => setActiveTab("departments")}
+              >
+                Department Management
               </li>
               <li
                 className="menu-item"
@@ -918,7 +1272,9 @@ export default function AdminPage() {
                     ? "LC Dashboard."
                     : activeTab === "members"
                       ? "LC Member Management."
-                      : "KPI Configuration."}
+                      : activeTab === "kpi"
+                        ? "KPI Configuration."
+                        : "Department Management."}
                 </h1>
               </div>
               <div className="intro-actions">
@@ -969,6 +1325,22 @@ export default function AdminPage() {
                       }}
                     >
                       + Add KPI
+                    </button>
+                  </>
+                )}
+                {activeTab === "departments" && (
+                  <>
+                    <button
+                      className={`btn-action secondary${!isAdmin ? " restricted" : ""}`}
+                      onClick={() => { setSubDeptModalMode("add"); setEditingSubDept(null); setShowSubDeptModal(true); }}
+                    >
+                      + Add Sub-Department
+                    </button>
+                    <button
+                      className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
+                      onClick={() => { setDeptModalMode("add"); setEditingDept(null); setShowDeptModal(true); }}
+                    >
+                      + Add Department
                     </button>
                   </>
                 )}
@@ -1194,7 +1566,7 @@ export default function AdminPage() {
                           </div>
 
                           <div className="table-cell">
-                            <div>{m.department?.name ?? "—"}</div>
+                            <div>{m.department?.name ?? "Unassigned"}</div>
                             <div className="member-subtext">{m.department?.officeType ?? ""}</div>
                           </div>
 
@@ -1367,6 +1739,153 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === "departments" && (
+              <>
+                <div className="content-table">
+                  <div className="table-header">
+                    <h2 className="table-title">
+                      Departments{" "}
+                      <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
+                        ({departments.length})
+                      </span>
+                    </h2>
+                  </div>
+                  <div className="table-grid-header">
+                    <div>Name</div>
+                    <div>Office Type</div>
+                    <div>Leader</div>
+                    <div>Description</div>
+                    <div>Members</div>
+                    <div>Actions</div>
+                  </div>
+                  <div className="table-body">
+                    {loadingDepartments ? (
+                      [1, 2].map((i) => (
+                        <div className="table-row-6" key={i}>
+                          <div className="loading-shimmer" style={{ width: "80%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "50%" }} />
+                          <div className="loading-shimmer" style={{ width: "70%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                        </div>
+                      ))
+                    ) : departments.length === 0 ? (
+                      <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
+                        No departments yet. Add one to get started.
+                      </div>
+                    ) : (
+                      departments.map((d) => (
+                        <div className="table-row-6" key={d._id}>
+                          <div className="table-cell">{d.name}</div>
+                          <div className="table-cell">{d.officeType}</div>
+                          <div className="table-cell">
+                            {d.deptLeader ? `${d.deptLeader.firstName} ${d.deptLeader.lastName}` : "—"}
+                          </div>
+                          <div
+                            className="table-cell member-subtext"
+                            style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            title={d.description}
+                          >
+                            {d.description || "—"}
+                          </div>
+                          <div className="table-cell">
+                            {d.memberCount}{d.memberCapacity != null ? ` / ${d.memberCapacity}` : ""}
+                            <div className="member-subtext">{d.subDepartmentCount} sub-department(s)</div>
+                          </div>
+                          <div className="table-cell row-actions">
+                            <button
+                              className={`btn-icon${!isAdmin ? " disabled-btn" : ""}`}
+                              onClick={() => { setEditingDept(d); setDeptModalMode("edit"); setShowDeptModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={`btn-icon delete-btn${!isAdmin ? " disabled-btn" : ""}`}
+                              onClick={() => handleDeleteDepartment(d._id, d.name)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="content-table">
+                  <div className="table-header">
+                    <h2 className="table-title">
+                      Sub-Departments{" "}
+                      <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
+                        ({subDepartments.length})
+                      </span>
+                    </h2>
+                  </div>
+                  <div className="table-grid-header">
+                    <div>Name</div>
+                    <div>Parent Department</div>
+                    <div>Leader</div>
+                    <div>Description</div>
+                    <div>Members</div>
+                    <div>Actions</div>
+                  </div>
+                  <div className="table-body">
+                    {loadingSubDepartments ? (
+                      [1, 2].map((i) => (
+                        <div className="table-row-6" key={i}>
+                          <div className="loading-shimmer" style={{ width: "80%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "50%" }} />
+                          <div className="loading-shimmer" style={{ width: "70%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                        </div>
+                      ))
+                    ) : subDepartments.length === 0 ? (
+                      <div style={{ padding: "24px 0", color: "#999", fontSize: 14 }}>
+                        No sub-departments yet. Add one to get started.
+                      </div>
+                    ) : (
+                      subDepartments.map((s) => (
+                        <div className="table-row-6" key={s._id}>
+                          <div className="table-cell">{s.name}</div>
+                          <div className="table-cell">{s.department?.name ?? "—"}</div>
+                          <div className="table-cell">
+                            {s.subDeptLeader ? `${s.subDeptLeader.firstName} ${s.subDeptLeader.lastName}` : "—"}
+                          </div>
+                          <div
+                            className="table-cell member-subtext"
+                            style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            title={s.description}
+                          >
+                            {s.description || "—"}
+                          </div>
+                          <div className="table-cell">
+                            {s.memberCount}{s.memberCapacity != null ? ` / ${s.memberCapacity}` : ""}
+                          </div>
+                          <div className="table-cell row-actions">
+                            <button
+                              className={`btn-icon${!isAdmin ? " disabled-btn" : ""}`}
+                              onClick={() => { setEditingSubDept(s); setSubDeptModalMode("edit"); setShowSubDeptModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={`btn-icon delete-btn${!isAdmin ? " disabled-btn" : ""}`}
+                              onClick={() => handleDeleteSubDepartment(s._id, s.name)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </main>
