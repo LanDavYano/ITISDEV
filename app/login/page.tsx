@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { roleHomePath } from "@/lib/roles"
-import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react"
+import { loadRetainedDraft } from "@/lib/session-timeout"
+import { ArrowLeft, AlertCircle, Loader2, Clock } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,6 +18,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [timedOut, setTimedOut] = useState(false)
+
+  // Arriving here after an automatic inactivity logout (?timeout=1).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("timeout") === "1") {
+      setTimedOut(true)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,10 +44,12 @@ export default function LoginPage() {
     } else {
       // Fresh login: make system announcements show again on the landing page.
       sessionStorage.removeItem("announcementsSeen")
-      // Redirect based on the signed-in user's role.
       const session = await getSession()
       setLoading(false)
-      router.push(roleHomePath(session?.user?.roleLevel))
+      // If an inactivity logout saved unsaved inputs, send the user straight
+      // back to the page they were on so the draft can be restored.
+      const draft = loadRetainedDraft(email)
+      router.push(draft?.path ?? roleHomePath(session?.user?.roleLevel))
       router.refresh()
     }
   }
@@ -88,6 +99,16 @@ export default function LoginPage() {
 
           <h1 className="text-3xl font-bold mb-2">Sign in</h1>
           <p className="text-gray-500 dark:text-gray-400 mb-8">Use your AIESEC email to continue.</p>
+
+          {timedOut && !error && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-sm px-4 py-3 rounded-xl mb-6">
+              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                You were logged out due to inactivity. Sign in again to continue —
+                any unsaved inputs were kept and will be restored.
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-sm px-4 py-3 rounded-xl mb-6">

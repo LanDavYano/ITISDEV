@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
+import { voluntaryLogout } from "@/lib/logout"
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -370,7 +371,7 @@ export default function DeadlineManagementPage() {
           <div>
             <div
               className="dl-menu-item"
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={() => voluntaryLogout("/")}
             >
               <span style={{ color: "#ef4444", fontWeight: 600 }}>Log Out</span>
             </div>
