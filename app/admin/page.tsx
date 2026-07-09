@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { voluntaryLogout } from "@/lib/logout";
 import AnnouncementsModal from "@/components/announcements-modal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1410,7 +1410,7 @@ export default function AdminPage() {
           <div>
             <div
               className="menu-item"
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={() => voluntaryLogout("/")}
             >
               <span style={{ color: "#ef4444", fontWeight: 600 }}>Log Out</span>
             </div>

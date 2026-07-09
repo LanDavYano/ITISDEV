@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { voluntaryLogout } from '@/lib/logout';
 import {
   LayoutDashboard, Globe, ListChecks, MessageSquare, FileText,
   Settings, HelpCircle, Search, Bell, Plus, Tag, Clock,
@@ -443,7 +444,7 @@ const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
                   </div>
                   <div className="border-t border-gray-100 dark:border-gray-700 pt-1">
                     <button
-                      onClick={() => signOut({ callbackUrl: '/' })}
+                      onClick={() => voluntaryLogout('/')}
                       className="w-full flex items-center gap-3 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                     >
                       <LogOut className="w-4 h-4" /> Sign Out

@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
+import SessionTimeoutProvider from "@/components/session-timeout-provider"
 
 interface Project {
   id: string
@@ -36,15 +37,23 @@ export default function ClientLayout({
   }
 
   // Landing / auth / feature pages stand on their own — no sidebar or top header.
+  // SessionTimeoutProvider is global: it tracks inactivity, warns, auto-logs-out,
+  // and keeps tabs in lockstep on every page (it is inert until authenticated).
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   ) {
-    return <>{children}</>
+    return (
+      <>
+        <SessionTimeoutProvider />
+        {children}
+      </>
+    )
   }
 
   return (
     <DashboardLayout projects={projects} onAddProject={handleAddProject}>
+      <SessionTimeoutProvider />
       {children}
     </DashboardLayout>
   )
