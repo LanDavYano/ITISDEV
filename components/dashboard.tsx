@@ -5,31 +5,96 @@ import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   LayoutDashboard, Globe, ListChecks, MessageSquare, FileText,
-  Settings, HelpCircle, Search, Bell, Plus, Download, Tag, Clock,
-  BarChart3, ChevronDown, Check, X, AlertCircle, FolderOpen,
-  User, LogOut,
+  Settings, HelpCircle, Search, Bell, Plus, Tag, Clock,
+  BarChart3, ChevronDown, Check, X, AlertCircle,
+  User as UserIcon, LogOut, Users, CheckCircle2, Timer, CalendarClock,
 } from 'lucide-react';
-import type { Deliverable, StatItem, ChartBar, PerformanceCycle, User } from './types';
+import type { Deliverable, ChartBar } from './types';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface DashData {
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    profilePicture: string;
+    role: string;
+    roleLevel: number;
+    department: string;
+    subDepartment: string;
+  };
+  cycle: {
+    _id: string;
+    periodMonth: string;
+    periodYear: number;
+    submissionDeadline: string;
+    isOpen: boolean;
+  } | null;
+  myRecord: {
+    submittedAt: string | null;
+    deliverablesAssigned: number;
+    deliverablesAnswered: number;
+    meetingsTotal: number;
+    meetingsAttended: number;
+  } | null;
+  subDeptMembers: Array<{
+    _id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    roleLevel: number;
+    hasSubmitted: boolean;
+  }>;
+}
+
+interface DashboardProps {
+  dashData: DashData | null;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { label: 'LC Dashboard',   Icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Rating Submission', Icon: ListChecks,   href: '/performance' },
-  { label: 'EXPA Leads',     Icon: Globe,           href: '/expa-leads' },
-  { label: 'My Deliverables',Icon: ListChecks,      href: '/my-task' },
-  { label: 'EB Updates',     Icon: MessageSquare,   href: '/chats' },
-  { label: 'Toolkits & Hub', Icon: FileText,        href: '/documents' },
+  { label: 'LC Dashboard',      Icon: LayoutDashboard, href: '/dashboard' },
+  { label: 'Rating Submission', Icon: ListChecks,      href: '/performance' },
+  { label: 'EXPA Leads',        Icon: Globe,           href: '/expa-leads' },
+  { label: 'My Deliverables',   Icon: ListChecks,      href: '/my-task' },
+  { label: 'EB Updates',        Icon: MessageSquare,   href: '/chats' },
+  { label: 'Toolkits & Hub',    Icon: FileText,        href: '/documents' },
 ];
 
 const BOTTOM_NAV = [
-  { label: 'Settings',       Icon: Settings,    href: '/profile', badge: 0 },
-  { label: 'Global Support', Icon: HelpCircle,  href: '/support', badge: 2 },
+  { label: 'Settings',       Icon: Settings,   href: '/profile' },
+  { label: 'Global Support', Icon: HelpCircle, href: '/support', badge: 2 },
 ];
 
 const STATUS_STYLES: Record<Deliverable['status'], string> = {
-  overdue:          'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
-  'action-required':'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-  completed:        'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+  overdue:           'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+  'action-required': 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  completed:         'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 18) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
+function daysUntil(dateStr: string): number {
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000);
+}
+
+function fmtDeadline(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 const DeliverableItem: React.FC<{ item: Deliverable; onToggle: (id: string) => void }> = ({ item, onToggle }) => (
   <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${
@@ -49,14 +114,11 @@ const DeliverableItem: React.FC<{ item: Deliverable; onToggle: (id: string) => v
     >
       {item.completed && <Check className="w-3 h-3" />}
     </button>
-
     <div className="flex-1 min-w-0">
       <div className="flex items-start justify-between gap-3 mb-1">
         <h4 className={`text-sm font-semibold ${
           item.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'
-        }`}>
-          {item.title}
-        </h4>
+        }`}>{item.title}</h4>
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_STYLES[item.status]}`}>
           {item.statusLabel}
         </span>
@@ -106,9 +168,7 @@ const MoSChart: React.FC<{ bars: ChartBar[] }> = ({ bars }) => {
             />
             <span className={`text-xs font-medium ${
               bar.isCurrent ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-400 dark:text-gray-500'
-            }`}>
-              {bar.month}
-            </span>
+            }`}>{bar.month}</span>
           </div>
         );
       })}
@@ -116,22 +176,29 @@ const MoSChart: React.FC<{ bars: ChartBar[] }> = ({ bars }) => {
   );
 };
 
-interface DashboardProps {
-  user: User;
-  cycle: PerformanceCycle;
-  stats: StatItem[];
-  chartBars: ChartBar[];
-  initialDeliverables: Deliverable[];
-}
+// Placeholder chart bars until historical data is wired up
+const PLACEHOLDER_BARS: ChartBar[] = (() => {
+  const now = new Date();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months.map((month, i) => ({
+    month,
+    value: i < now.getMonth() ? Math.floor(Math.random() * 8) + 2 : null,
+    max: 10,
+    isCurrent: i === now.getMonth(),
+  }));
+})();
 
-const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, initialDeliverables }) => {
+// ── Main Component ────────────────────────────────────────────────────────────
+
+const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
   const router = useRouter();
   const { data: session } = useSession();
-  const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNav, setActiveNav] = useState('/dashboard');
-  const [alertDismissed, setAlertDismissed] = useState(false);
+  const [deadlineDismissed, setDeadlineDismissed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -144,9 +211,54 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const initials = session?.user
-    ? `${session.user.firstName?.[0] ?? ''}${session.user.lastName?.[0] ?? ''}`.toUpperCase() || user.name[0]
-    : user.name[0];
+  // Derived display values
+  const firstName = dashData?.user.firstName ?? session?.user?.firstName ?? '';
+  const lastName  = dashData?.user.lastName  ?? session?.user?.lastName  ?? '';
+  const email     = dashData?.user.email     ?? session?.user?.email     ?? '';
+  const initials  = `${firstName[0] ?? ''}${lastName[0] ?? ''}`.toUpperCase() || '?';
+  const profilePic = dashData?.user.profilePicture;
+  const showPic   = !!(profilePic && profilePic !== '/images/default-avatar.png' && !imgError);
+
+  const cycle     = dashData?.cycle ?? null;
+  const myRecord  = dashData?.myRecord ?? null;
+  const hasSubmitted = !!(myRecord?.submittedAt);
+  const daysLeft  = cycle ? daysUntil(cycle.submissionDeadline) : null;
+  const isUrgent  = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
+
+  const subDeptMembers = dashData?.subDeptMembers ?? [];
+  const submittedCount = subDeptMembers.filter((m) => m.hasSubmitted).length;
+
+  // Stats derived from real data
+  const stats = [
+    {
+      icon: <CalendarClock className="w-5 h-5" />,
+      color: isUrgent ? '#ef4444' : '#3b82f6',
+      value: cycle
+        ? daysLeft !== null && daysLeft < 0
+          ? 'Closed'
+          : daysLeft === 0
+          ? 'Today'
+          : `${daysLeft}d`
+        : '—',
+      label: 'Days Until Deadline',
+    },
+    {
+      icon: <ListChecks className="w-5 h-5" />,
+      color: '#10b981',
+      value: myRecord
+        ? `${myRecord.deliverablesAnswered}/${myRecord.deliverablesAssigned}`
+        : '—',
+      label: 'Deliverables',
+    },
+    {
+      icon: <Users className="w-5 h-5" />,
+      color: '#8b5cf6',
+      value: myRecord
+        ? `${myRecord.meetingsAttended}/${myRecord.meetingsTotal}`
+        : '—',
+      label: 'Meetings Attended',
+    },
+  ];
 
   const toggleDeliverable = useCallback((id: string) => {
     setDeliverables((prev) =>
@@ -174,19 +286,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
       })
     : deliverables;
 
-  const pendingCount = deliverables.filter((d) => !d.completed).length;
-
   const handleNav = (href: string) => {
     setActiveNav(href);
     router.push(href);
   };
 
-  const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good Morning';
-    if (h < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -221,36 +326,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
               {label}
-              {href === '/my-task' && pendingCount > 0 && (
-                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold ${
-                  activeNav === href
-                    ? 'bg-white/20 text-white'
-                    : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                }`}>
-                  {pendingCount}
-                </span>
-              )}
             </button>
           ))}
         </nav>
-
-        {/* Portfolios */}
-        <div className="px-4 pt-5 pb-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-2">
-            My Portfolios
-            <button onClick={() => handleNav('/projects')} className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <button onClick={() => handleNav('/projects')} className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <span className="w-2 h-2 rounded-full bg-pink-400 flex-shrink-0" />
-            oGV Summer Peak
-          </button>
-          <button onClick={() => handleNav('/projects')} className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-            Talent Management
-          </button>
-        </div>
 
         {/* Bottom nav */}
         <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-800 space-y-0.5">
@@ -262,7 +340,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
               {label}
-              {badge > 0 && (
+              {badge && badge > 0 && (
                 <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold">
                   {badge}
                 </span>
@@ -281,30 +359,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Search deliverables, tags..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
               className="bg-transparent border-none outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 w-full"
             />
-            {searchQuery ? (
+            {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
-            ) : (
-              <span className="text-xs border border-gray-300 dark:border-gray-600 text-gray-400 px-1.5 py-0.5 rounded">⌘F</span>
             )}
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => handleNav('/my-task')}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Log EP Contact
-              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-            </button>
             <button
               onClick={() => handleNav('/chats')}
               className="relative text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -317,23 +385,45 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
             <div ref={profileRef} className="relative">
               <button
                 onClick={() => setProfileOpen((v) => !v)}
-                className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-gray-200 dark:ring-gray-700 hover:ring-blue-400 transition-all"
+                className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-gray-200 dark:ring-gray-700 hover:ring-blue-400 transition-all overflow-hidden"
               >
-                {initials}
+                {showPic ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profilePic!}
+                    alt={initials}
+                    className="w-full h-full object-cover"
+                    onError={() => setImgError(true)}
+                  />
+                ) : initials}
               </button>
 
               {profileOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg py-2 z-50">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {session?.user?.name ?? user.name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      {session?.user?.email ?? ''}
-                    </p>
-                    {(session?.user?.role ?? user.role) && (
-                      <span className="inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                        {session?.user?.role ?? user.role}
+                    {/* Mini profile picture */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+                        {showPic ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={profilePic!} alt={initials} className="w-full h-full object-cover" />
+                        ) : initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {firstName} {lastName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{email}</p>
+                      </div>
+                    </div>
+                    {dashData?.user.role && (
+                      <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                        {dashData.user.role}
+                      </span>
+                    )}
+                    {dashData?.user.department && (
+                      <span className="inline-block ml-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {dashData.user.department}
                       </span>
                     )}
                   </div>
@@ -342,7 +432,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
                       onClick={() => { setProfileOpen(false); handleNav('/profile'); }}
                       className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <User className="w-4 h-4" /> View Profile
+                      <UserIcon className="w-4 h-4" /> View Profile
                     </button>
                     <button
                       onClick={() => { setProfileOpen(false); handleNav('/profile'); }}
@@ -369,74 +459,103 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-5xl mx-auto px-8 py-8 space-y-6">
 
-            {/* Welcome */}
+            {/* ── Welcome ── */}
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{cycle.name}</p>
-                <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  {getGreeting()}, {user.name}!
-                </h1>
-              </div>
-              <button
-                onClick={() => alert('Export — wire to your export API')}
-                className="flex items-center gap-2 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Export MoS Report
-              </button>
-            </div>
-
-            {/* Performance submission CTA */}
-            <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-2xl p-5">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
-                  <ListChecks className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-0.5">
-                    Performance Rating Submission
-                  </h4>
-                  <p className="text-xs text-blue-700 dark:text-blue-400">
-                    Submit your goals and self-ratings for the current cycle, and review
-                    your assigned deliverables &amp; meetings.
+                {cycle ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    {cycle.periodMonth} {cycle.periodYear} Evaluation Cycle
                   </p>
-                </div>
+                ) : (
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mb-1">No active cycle</p>
+                )}
+                <h1 className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {getGreeting()}{firstName ? `, ${firstName}` : ''}!
+                </h1>
+                {dashData?.user.subDepartment && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {dashData.user.department}
+                    {dashData.user.subDepartment ? ` · ${dashData.user.subDepartment}` : ''}
+                  </p>
+                )}
               </div>
-              <button
-                onClick={() => handleNav('/performance')}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0 ml-4"
-              >
-                Open Submission Form
-              </button>
             </div>
 
-            {/* Alert banner */}
-            {!alertDismissed && (
-              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5">
+            {/* ── Deadline Alert Banner ── */}
+            {cycle && !deadlineDismissed && (
+              <div className={`flex items-center justify-between rounded-2xl p-5 border ${
+                hasSubmitted
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50'
+                  : isUrgent
+                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800/50'
+                  : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50'
+              }`}>
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
-                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    hasSubmitted
+                      ? 'bg-emerald-100 dark:bg-emerald-900/40'
+                      : isUrgent
+                      ? 'bg-rose-100 dark:bg-rose-900/40'
+                      : 'bg-amber-100 dark:bg-amber-900/40'
+                  }`}>
+                    {hasSubmitted
+                      ? <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      : <AlertCircle className={`w-5 h-5 ${isUrgent ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                    }
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-0.5">
-                      Action Required: Initial LDA Submission
+                    <h4 className={`text-sm font-semibold mb-0.5 ${
+                      hasSubmitted
+                        ? 'text-emerald-900 dark:text-emerald-200'
+                        : isUrgent
+                        ? 'text-rose-900 dark:text-rose-200'
+                        : 'text-amber-900 dark:text-amber-200'
+                    }`}>
+                      {hasSubmitted
+                        ? `Rating Submitted — ${cycle.periodMonth} ${cycle.periodYear}`
+                        : isUrgent && daysLeft === 0
+                        ? 'Rating Due Today!'
+                        : isUrgent
+                        ? `Rating Due in ${daysLeft} Day${daysLeft !== 1 ? 's' : ''}!`
+                        : 'Performance Rating Due'
+                      }
                     </h4>
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                      Your Leadership Development Assessment is pending. Deadline:{' '}
-                      {new Date(cycle.endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+                    <p className={`text-xs ${
+                      hasSubmitted
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : isUrgent
+                        ? 'text-rose-700 dark:text-rose-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {hasSubmitted
+                        ? 'You\'ve submitted your self-rating for this cycle.'
+                        : `Deadline: ${fmtDeadline(cycle.submissionDeadline)}`
+                      }
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                  {!hasSubmitted && cycle.isOpen && (
+                    <button
+                      onClick={() => handleNav('/performance')}
+                      className={`text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors ${
+                        isUrgent
+                          ? 'bg-rose-500 hover:bg-rose-600'
+                          : 'bg-amber-500 hover:bg-amber-600'
+                      }`}
+                    >
+                      Submit Now
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleNav('/my-task')}
-                    className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
-                  >
-                    Take LDA Now
-                  </button>
-                  <button
-                    onClick={() => setAlertDismissed(true)}
-                    className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors p-1"
+                    onClick={() => setDeadlineDismissed(true)}
+                    className={`transition-colors p-1 ${
+                      hasSubmitted
+                        ? 'text-emerald-500 hover:text-emerald-700'
+                        : isUrgent
+                        ? 'text-rose-500 hover:text-rose-700'
+                        : 'text-amber-500 hover:text-amber-700'
+                    }`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -444,66 +563,139 @@ const Dashboard: React.FC<DashboardProps> = ({ user, cycle, stats, chartBars, in
               </div>
             )}
 
-            {/* Stats */}
+            {/* ── Rating Submission CTA (shown only when not yet submitted + cycle open) ── */}
+            {cycle?.isOpen && !hasSubmitted && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-2xl p-5">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+                    <ListChecks className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-0.5">
+                      Performance Rating Submission Open
+                    </h4>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">
+                      Submit your self-rating for {cycle.periodMonth} {cycle.periodYear}. Your team leader has assigned your deliverables &amp; meetings.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleNav('/performance')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0 ml-4"
+                >
+                  Open Submission Form
+                </button>
+              </div>
+            )}
+
+            {/* ── Stats ── */}
             <div className="grid grid-cols-3 gap-4">
               {stats.map((stat, i) => (
                 <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 shadow-sm flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                    <i className={`${stat.icon} text-lg`} style={{ color: stat.color }} />
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center flex-shrink-0" style={{ color: stat.color }}>
+                    {stat.icon}
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</div>
+                    <div className={`text-2xl font-bold ${dashData ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600 animate-pulse'}`}>
+                      {dashData ? stat.value : '—'}
+                    </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stat.label}</div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Chart card */}
+            {/* ── Sub-Department Member Status ── */}
+            {subDeptMembers.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    {dashData?.user.subDepartment || 'My Sub-Department'} — Submission Status
+                  </h3>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                    {submittedCount}/{subDeptMembers.length} submitted
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {subDeptMembers.map((member) => (
+                    <div
+                      key={member._id}
+                      className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                          {member.firstName[0]}{member.lastName[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {member.firstName} {member.lastName}
+                            {member._id === dashData?.user.id && (
+                              <span className="ml-2 text-xs text-blue-500 font-normal">(you)</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{member.role}</p>
+                        </div>
+                      </div>
+                      <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        member.hasSubmitted
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      }`}>
+                        {member.hasSubmitted
+                          ? <><CheckCircle2 className="w-3 h-3" /> Submitted</>
+                          : <><Timer className="w-3 h-3" /> Pending</>
+                        }
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── MoS Chart (placeholder until historical data is wired) ── */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-gray-400" />
-                  MoS Achievement Trend (oGV Approvals)
+                  MoS Achievement Trend
                 </h3>
-                <button className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-sm px-3 py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  2026 <ChevronDown className="w-3.5 h-3.5" />
-                </button>
+                <span className="text-xs text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg">
+                  {new Date().getFullYear()}
+                </span>
               </div>
-              <MoSChart bars={chartBars} />
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Historical chart coming soon</p>
+              <MoSChart bars={PLACEHOLDER_BARS} />
             </div>
 
-            {/* Deliverables card */}
+            {/* ── Deliverables (empty state until /my-task is the source) ── */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-gray-400" />
-                  Pending Deliverables &amp; LC Tracking
+                  <Plus className="w-4 h-4 text-gray-400" />
+                  My Deliverables
                 </h3>
-                {searchQuery && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {filteredDeliverables.length} result{filteredDeliverables.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
-                  </span>
-                )}
+                <button
+                  onClick={() => handleNav('/my-task')}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  View all →
+                </button>
               </div>
 
               {filteredDeliverables.length === 0 ? (
-                <div className="text-center py-12">
-                  <Search className="w-8 h-8 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-                  <h4 className="font-semibold text-gray-600 dark:text-gray-300 mb-1">
-                    {searchQuery ? 'No matching deliverables' : 'All caught up!'}
-                  </h4>
+                <div className="text-center py-10">
+                  <CheckCircle2 className="w-8 h-8 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                  <h4 className="font-semibold text-gray-600 dark:text-gray-300 mb-1">All caught up!</h4>
                   <p className="text-sm text-gray-400 dark:text-gray-500">
-                    {searchQuery ? `No results for "${searchQuery}"` : 'No pending deliverables for this cycle.'}
+                    Your deliverables will appear here once your team leader assigns them.
                   </p>
-                  {searchQuery && (
-                    <button
-                      className="mt-4 text-sm border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      onClick={() => setSearchQuery('')}
-                    >
-                      Clear search
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleNav('/my-task')}
+                    className="mt-4 text-sm border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Go to My Tasks
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
