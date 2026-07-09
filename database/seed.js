@@ -19,6 +19,8 @@ const User = require("./User")
 const PerformanceRecord = require("./PerformanceRecord")
 const EvaluationCycle = require("./EvaluationCycle")
 const AuditLog = require("./AuditLog")
+const Announcement = require("./Announcement")
+const AnnouncementLog = require("./AnnouncementLog")
 
 const MONTHS = PerformanceRecord.MONTHS
 
@@ -86,6 +88,8 @@ async function seed() {
   console.log("[seed] Clearing existing collections…")
   await Promise.all([
     AuditLog.deleteMany({}),
+    AnnouncementLog.deleteMany({}),
+    Announcement.deleteMany({}),
     PerformanceRecord.deleteMany({}),
     EvaluationCycle.deleteMany({}),
     User.deleteMany({}),
@@ -183,6 +187,28 @@ async function seed() {
     createdBy: deptLeader._id,
   })
 
+  // 6b. Sample system announcement (active, no expiry) + its creation log.
+  console.log("[seed] Creating a sample announcement…")
+  const announcement = await Announcement.create({
+    title: `Welcome to the ${periodMonth} ${periodYear} evaluation cycle!`,
+    content:
+      `Submissions for the ${periodMonth} cycle are now open. ` +
+      `Please complete your goals and self-ratings before ${endOfMonth.toDateString()}. ` +
+      `Reach out to the PM team if you have any questions.`,
+    postedAt: new Date(),
+    expiresAt: endOfMonth,
+    createdBy: deptLeader._id,
+    createdByName: `${deptLeader.firstName} ${deptLeader.lastName}`,
+  })
+  await AnnouncementLog.create({
+    announcement: announcement._id,
+    titleSnapshot: announcement.title,
+    action: "create",
+    actor: deptLeader._id,
+    actorName: `${deptLeader.firstName} ${deptLeader.lastName}`,
+    actorRole: "Leader of Department",
+  })
+
   // 7. Sample performance record for the member (current cycle, submitted,
   //    with team-leader-assigned deliverable/meeting counts).
   console.log("[seed] Creating a sample performance record…")
@@ -208,6 +234,7 @@ async function seed() {
   console.log(`  sub-departments:  ${subDepartments.length}`)
   console.log(`  users:            3 (demo password: Password123!)`)
   console.log(`  cycle:            ${cycle.periodMonth} ${cycle.periodYear} (deadline ${endOfMonth.toDateString()})`)
+  console.log(`  announcements:    1 (active until ${endOfMonth.toDateString()})`)
   console.log(`  performance recs: 1`)
 }
 
