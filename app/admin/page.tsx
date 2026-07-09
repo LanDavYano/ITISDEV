@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import AnnouncementsModal from "@/components/announcements-modal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,27 @@ interface Submission {
   member: PopulatedMember;
   status: "Submitted" | "Submitted with flags" | "Not submitted";
   cycle: string;
+}
+
+interface AnnouncementItem {
+  _id: string;
+  title: string;
+  content: string;
+  postedAt: string;
+  expiresAt: string | null;
+  status?: "Active" | "Expired" | "Deleted";
+  createdByName: string;
+  isDeleted?: boolean;
+}
+
+interface AnnouncementLogItem {
+  _id: string;
+  titleSnapshot: string;
+  action: "create" | "edit" | "delete";
+  changes: { field: string; from: unknown; to: unknown }[];
+  actorName: string;
+  actorRole: string | null;
+  createdAt: string;
 }
 
 interface KpiItem {
@@ -189,8 +211,9 @@ const STYLES = `
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
 .form-field { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; }
 .form-field label { font-size:12px; font-weight:600; color:var(--text-sub); text-transform:uppercase; }
-.form-field input, .form-field select { padding:9px 12px; border:1px solid var(--border-color); border-radius:8px; font-size:14px; outline:none; font-family:inherit; }
-.form-field input:focus, .form-field select:focus { border-color:var(--primary-blue); }
+.form-field input, .form-field select, .form-field textarea { padding:9px 12px; border:1px solid var(--border-color); border-radius:8px; font-size:14px; outline:none; font-family:inherit; }
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color:var(--primary-blue); }
+.form-field textarea { resize:vertical; min-height:90px; }
 .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
 .dept-status-row { display:flex; align-items:center; justify-content:space-between; padding:12px 4px; border-bottom:1px solid var(--secondary-bg); }
 .dept-status-row:last-child { border-bottom:none; }
@@ -859,6 +882,109 @@ function SubDepartmentModal({ mode, subDepartment, departments, members, onClose
   );
 }
 
+// ─── AnnouncementModal ────────────────────────────────────────────────────────
+
+interface AnnouncementModalProps {
+  mode: "add" | "edit";
+  announcement?: AnnouncementItem;
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+/** Convert an ISO date to the value format datetime-local inputs expect. */
+const toLocalInputValue = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: AnnouncementModalProps) {
+  const [title, setTitle] = useState(announcement?.title ?? "");
+  const [content, setContent] = useState(announcement?.content ?? "");
+  const [expiresAt, setExpiresAt] = useState(toLocalInputValue(announcement?.expiresAt));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title.trim()) return showToast("Title is required.", "error");
+    if (!content.trim()) return showToast("Message content is required.", "error");
+
+    setSaving(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        content: content.trim(),
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      };
+      const res = await fetch(
+        mode === "add" ? "/api/announcements" : `/api/announcements/${announcement!._id}`,
+        {
+          method: mode === "add" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save announcement");
+      showToast(mode === "add" ? "Announcement published!" : "Announcement updated.", "success");
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">
+          {mode === "add" ? "Create Announcement" : "Edit Announcement"}
+        </div>
+        <div className="form-field">
+          <label>Title</label>
+          <input
+            value={title}
+            maxLength={200}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. July submission deadline extended"
+          />
+        </div>
+        <div className="form-field">
+          <label>Message Content</label>
+          <textarea
+            value={content}
+            maxLength={5000}
+            rows={5}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Write the reminder, update, or organizational notice all users should see…"
+          />
+        </div>
+        <div className="form-field">
+          <label>Valid Until (optional)</label>
+          <input
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+          />
+          <span style={{ fontSize: 11, color: "var(--text-sub)" }}>
+            Leave blank to keep the announcement visible until it is deleted.
+            After this date it automatically disappears for users.
+          </span>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-action primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : mode === "add" ? "Publish Announcement" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -878,8 +1004,14 @@ export default function AdminPage() {
   const [editingMember, setEditingMember]   = useState<PopulatedMember | null>(null);
   const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg]     = useState("");
-  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi" | "departments">("dashboard");
+  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi" | "departments" | "announcements">("dashboard");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [annLogs, setAnnLogs] = useState<AnnouncementLogItem[]>([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [showAnnModal, setShowAnnModal] = useState(false);
+  const [annModalMode, setAnnModalMode] = useState<"add" | "edit">("add");
+  const [editingAnn, setEditingAnn] = useState<AnnouncementItem | null>(null);
   const [kpis, setKpis] = useState<KpiItem[]>([]);
   const [loadingKpis, setLoadingKpis] = useState(false);
   const [showKpiModal, setShowKpiModal] = useState(false);
@@ -1030,6 +1162,35 @@ export default function AdminPage() {
     }
   }, [showToast]);
 
+  const fetchAnnouncements = useCallback(async () => {
+    setLoadingAnnouncements(true);
+    try {
+      const res = await fetch("/api/announcements/history");
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements ?? []);
+        setAnnLogs(data.logs ?? []);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  }, []);
+
+  const handleDeleteAnnouncement = async (id: string, title: string) => {
+    if (!window.confirm(`Delete the announcement "${title}"? Users will no longer see it, but it stays in the history log.`)) return;
+    try {
+      const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      showToast("Announcement deleted.", "success");
+      fetchAnnouncements();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
@@ -1040,8 +1201,9 @@ export default function AdminPage() {
       fetchKpis();
       fetchDepartments();
       fetchSubDepartments();
+      fetchAnnouncements();
     }
-  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments, fetchAnnouncements]);
 
   // Lightweight polling while the Department Management tab is open so
   // changes made from another device/session show up without a manual refresh.
@@ -1180,6 +1342,18 @@ export default function AdminPage() {
           showToast={showToast}
         />
       )}
+      {showAnnModal && (
+        <AnnouncementModal
+          mode={annModalMode}
+          announcement={annModalMode === "edit" ? editingAnn ?? undefined : undefined}
+          onClose={() => { setShowAnnModal(false); setEditingAnn(null); }}
+          onSaved={() => fetchAnnouncements()}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Login-first system announcements (shown to leaders landing on /admin) */}
+      <AnnouncementsModal />
 
       <div className="admin-app">
         {/* ── Sidebar ── */}
@@ -1212,6 +1386,12 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("departments")}
               >
                 Department Management
+              </li>
+              <li
+                className={`menu-item${activeTab === "announcements" ? " active" : ""}`}
+                onClick={() => setActiveTab("announcements")}
+              >
+                Announcements
               </li>
               <li
                 className="menu-item"
@@ -1274,7 +1454,9 @@ export default function AdminPage() {
                       ? "LC Member Management."
                       : activeTab === "kpi"
                         ? "KPI Configuration."
-                        : "Department Management."}
+                        : activeTab === "departments"
+                          ? "Department Management."
+                          : "System Announcements."}
                 </h1>
               </div>
               <div className="intro-actions">
@@ -1299,11 +1481,27 @@ export default function AdminPage() {
                   </>
                 )}
                 {activeTab === "dashboard" && (
+                  <>
+                    <button
+                      className="btn-action primary"
+                      onClick={() => router.push("/admin/deadline")}
+                    >
+                      Manage Deadlines
+                    </button>
+                    <button
+                      className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
+                      onClick={() => { setAnnModalMode("add"); setEditingAnn(null); setShowAnnModal(true); }}
+                    >
+                      + Create Announcement
+                    </button>
+                  </>
+                )}
+                {activeTab === "announcements" && (
                   <button
-                    className="btn-action primary"
-                    onClick={() => router.push("/admin/deadline")}
+                    className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
+                    onClick={() => { setAnnModalMode("add"); setEditingAnn(null); setShowAnnModal(true); }}
                   >
-                    Manage Deadlines
+                    + Create Announcement
                   </button>
                 )}
                 {activeTab === "kpi" && (
@@ -1884,6 +2082,142 @@ export default function AdminPage() {
                       ))
                     )}
                   </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Announcements tab ── */}
+            {activeTab === "announcements" && (
+              <>
+                {/* All announcements (incl. expired + deleted) */}
+                <div className="content-table">
+                  <div className="table-header">
+                    <h2 className="table-title">
+                      All Announcements{" "}
+                      <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
+                        ({announcements.length})
+                      </span>
+                    </h2>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 0.8fr 1fr", gap: 15, paddingBottom: 12, borderBottom: "1px solid var(--border-color)", fontSize: 12, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    <div>Announcement</div>
+                    <div>Posted</div>
+                    <div>Valid Until</div>
+                    <div>Status</div>
+                    <div>Actions</div>
+                  </div>
+
+                  <div className="table-body">
+                    {loadingAnnouncements ? (
+                      [1, 2].map((i) => (
+                        <div key={i} style={{ display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 0.8fr 1fr", gap: 15, alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                          <div className="loading-shimmer" style={{ width: "80%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "60%" }} />
+                          <div className="loading-shimmer" style={{ width: "50%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
+                        </div>
+                      ))
+                    ) : announcements.length === 0 ? (
+                      <div style={{ padding: "40px", textAlign: "center", color: "var(--text-sub)" }}>
+                        <h3>No announcements have been posted yet.</h3>
+                        <p style={{ fontSize: 13, marginTop: 6 }}>
+                          Use “+ Create Announcement” to publish the first system-wide notice.
+                        </p>
+                      </div>
+                    ) : (
+                      announcements.map((a) => {
+                        const pill = a.status === "Active" ? "success" : a.status === "Expired" ? "warning" : "danger";
+                        return (
+                          <div key={a._id} style={{ display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 0.8fr 1fr", gap: 15, alignItems: "center", padding: "16px 0", borderBottom: "1px solid var(--secondary-bg)", opacity: a.status === "Deleted" ? 0.6 : 1 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {a.title}
+                              </div>
+                              <div className="member-subtext" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={a.content}>
+                                {a.content}
+                              </div>
+                            </div>
+                            <div className="table-cell" style={{ fontSize: 13 }}>
+                              {formatDeadlineShort(a.postedAt)}
+                              <div className="member-subtext">{a.createdByName}</div>
+                            </div>
+                            <div className="table-cell" style={{ fontSize: 13 }}>
+                              {a.expiresAt ? formatDeadlineShort(a.expiresAt) : "No expiry"}
+                            </div>
+                            <div className="table-cell">
+                              <span className={`status-pill ${pill}`}>{a.status}</span>
+                            </div>
+                            <div className="table-cell row-actions">
+                              {a.status !== "Deleted" && (
+                                <>
+                                  <button
+                                    className={`btn-icon${!isAdmin ? " disabled-btn" : ""}`}
+                                    onClick={() => { setEditingAnn(a); setAnnModalMode("edit"); setShowAnnModal(true); }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className={`btn-icon delete-btn${!isAdmin ? " disabled-btn" : ""}`}
+                                    onClick={() => handleDeleteAnnouncement(a._id, a.title)}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Announcement history / logs */}
+                <div className="content-table">
+                  <div className="table-header">
+                    <h2 className="table-title">Announcement History / Logs</h2>
+                  </div>
+                  {annLogs.length === 0 ? (
+                    <div style={{ padding: "30px", textAlign: "center", color: "var(--text-sub)", fontSize: 14 }}>
+                      No announcement activity yet.
+                    </div>
+                  ) : (
+                    <div className="table-body">
+                      {annLogs.map((log) => {
+                        const pill = log.action === "create" ? "success" : log.action === "edit" ? "info" : "danger";
+                        return (
+                          <div key={log._id} style={{ padding: "14px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                              <span className={`status-pill ${pill}`} style={{ textTransform: "capitalize" }}>
+                                {log.action === "create" ? "Created" : log.action === "edit" ? "Edited" : "Deleted"}
+                              </span>
+                              <span style={{ fontWeight: 600, fontSize: 14 }}>{log.titleSnapshot}</span>
+                              <span style={{ fontSize: 12, color: "var(--text-sub)", marginLeft: "auto" }}>
+                                {new Date(log.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                              </span>
+                            </div>
+                            {log.changes.length > 0 && (
+                              <ul style={{ listStyle: "none", margin: "8px 0 0", fontSize: 13, color: "var(--text-sub)" }}>
+                                {log.changes.map((c, i) => (
+                                  <li key={i} style={{ marginBottom: 2 }}>
+                                    <strong style={{ color: "var(--text-color)" }}>{c.field}</strong>:{" "}
+                                    <span style={{ textDecoration: "line-through" }}>{String(c.from ?? "—").slice(0, 60)}</span>
+                                    {" → "}
+                                    <span style={{ color: "var(--text-color)" }}>{String(c.to ?? "—").slice(0, 60)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            <div style={{ fontSize: 12, color: "var(--text-sub)", marginTop: 6 }}>
+                              By <strong>{log.actorName}</strong>{log.actorRole ? ` (${log.actorRole})` : ""}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </>
             )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Dashboard from '@/components/dashboard';
+import AnnouncementsModal from '@/components/announcements-modal';
 import { roleHomePath } from '@/lib/roles';
 
 interface DashData {
@@ -72,5 +73,10 @@ export default function DashboardPage() {
     return null;
   }
 
-  return <Dashboard dashData={dashData} />;
+  return (
+    <>
+      <AnnouncementsModal />
+      <Dashboard dashData={dashData} />
+    </>
+  );
 }

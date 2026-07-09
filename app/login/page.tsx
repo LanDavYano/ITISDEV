@@ -33,6 +33,8 @@ export default function LoginPage() {
       setError("Invalid email or password. Please try again.")
       setLoading(false)
     } else {
+      // Fresh login: make system announcements show again on the landing page.
+      sessionStorage.removeItem("announcementsSeen")
       // Redirect based on the signed-in user's role.
       const session = await getSession()
       setLoading(false)

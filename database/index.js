@@ -17,6 +17,8 @@ const PerformanceRecord = require("./PerformanceRecord")
 const PasswordResetToken = require("./PasswordResetToken")
 const EvaluationCycle   = require("./EvaluationCycle")
 const AuditLog = require("./AuditLog")
+const Announcement = require("./Announcement")
+const AnnouncementLog = require("./AnnouncementLog")
 
 module.exports = {
   connectDB,
@@ -31,4 +33,6 @@ module.exports = {
   PasswordResetToken,
   EvaluationCycle,
   AuditLog,
+  Announcement,
+  AnnouncementLog,
 }
