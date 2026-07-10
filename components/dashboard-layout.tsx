@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { voluntaryLogout } from "@/lib/logout"
 import { ThemeToggle } from "@/components/theme-toggle"
+import NotificationBell from "@/components/notification-bell"
 import {
   LayoutDashboard, Globe, ListChecks, MessageSquare, FileText,
   Settings, HelpCircle, Plus, Bell, Search, ChevronDown,
@@ -163,6 +164,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
             <ThemeToggle />
+            <NotificationBell />
             <button
               onClick={() => router.push("/chats")}
               className="relative text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
