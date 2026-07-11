@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import NotificationBell from "@/components/notification-bell"
 import {
   LayoutDashboard, Globe, ListChecks, MessageSquare, FileText,
-  Settings, HelpCircle, Plus, Bell, Search, ChevronDown,
+  Settings, HelpCircle, Plus, Search, ChevronDown,
   User, LogOut,
 } from "lucide-react"
 
@@ -165,13 +165,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </button>
             <ThemeToggle />
             <NotificationBell />
-            <button
-              onClick={() => router.push("/chats")}
-              className="relative text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-pink-500 rounded-full border-2 border-white dark:border-gray-900" />
-            </button>
 
             {/* Profile dropdown */}
             <div ref={profileRef} className="relative">
