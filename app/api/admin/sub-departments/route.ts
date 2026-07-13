@@ -23,16 +23,30 @@ export async function GET(req: NextRequest) {
     await connectDB()
 
     const query = departmentId ? { department: departmentId } : {}
-    const subDepartments = await SubDepartment.find(query)
-      .sort({ name: 1 })
-      .populate("department", "name")
-      .populate("subDeptLeader", "firstName lastName")
-      .lean()
+    const subDepartments = await SubDepartment.find(query).sort({ name: 1 }).lean()
+    const leaderRole = await require("@/database").Role.findOne({ level: 2 }).select("_id").lean()
 
     const enriched = await Promise.all(
       subDepartments.map(async (sub: any) => {
+        const resolvedLeader = leaderRole
+          ? await User.findOne({ role: leaderRole._id, subDepartment: sub._id, department: sub.department })
+              .select("_id firstName lastName")
+              .lean()
+          : null
+
+        await SubDepartment.findByIdAndUpdate(sub._id, {
+          $set: { subDeptLeader: resolvedLeader?._id ?? null },
+        })
+
         const memberCount = await User.countDocuments({ subDepartment: sub._id })
-        return { ...sub, memberCount }
+        return {
+          ...sub,
+          department: sub.department ? { _id: sub.department, name: sub.departmentName ?? "" } : null,
+          subDeptLeader: resolvedLeader
+            ? { _id: resolvedLeader._id, firstName: resolvedLeader.firstName, lastName: resolvedLeader.lastName }
+            : null,
+          memberCount,
+        }
       })
     )
 
