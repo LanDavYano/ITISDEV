@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getCurrentCycle } from "@/lib/performance"
+import { calculateFinalScore, type PerfInputs } from "@/lib/scoring"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -9,44 +9,73 @@ export async function GET() {
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB } = require("@/database/db")
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const EvaluationCycle = require("@/database/EvaluationCycle")
+    const { connectDB, EvaluationCycle } = require("@/database")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const PerformanceRecord = require("@/database/PerformanceRecord")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const KpiConfig = require("@/database/KpiConfig")
 
     await connectDB()
 
-    // Get the most recent cycle (open or closed)
-    const cycle = await getCurrentCycle()
+    const cycle = await EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
+    const periodMonth = cycle?.periodMonth ?? new Date().toLocaleString("en-US", { month: "long" })
+    const periodYear = cycle?.periodYear ?? new Date().getFullYear()
 
-    if (!cycle) return NextResponse.json({})
+    const configDoc = await KpiConfig.findOne({ periodMonth, periodYear }).lean()
+    const kpiConfigs = configDoc?.kpis?.length ? configDoc.kpis : KpiConfig.DEFAULT_KPI_CONFIG
 
-    const records = await PerformanceRecord.find({
-      periodMonth: (cycle as any).periodMonth,
-      periodYear:  (cycle as any).periodYear,
-    }).lean()
+    // Only this period's records — a user can have records from prior
+    // periods too, and those shouldn't be mixed into the current score.
+    const records = await PerformanceRecord.find({ periodMonth, periodYear }).lean()
 
-    const map: Record<string, {
-      quantitativeRating: number | null
-      deliverablesAssigned: number
-      deliverablesAnswered: number
-      meetingsTotal: number
-      meetingsAttended: number
-    }> = {}
+    const map: Record<string, any> = {}
 
     for (const r of records as any[]) {
+      // "manual" KPIs (e.g. "VP Rating") are still scored per-member on the
+      // record itself — everything else (weight, source, cutoff, policy)
+      // comes from the shared KpiConfig above.
+      const manualScores: Record<string, number> = {}
+      for (const k of r.kpis ?? []) {
+        if (k?.name) manualScores[k.name] = k.score ?? 0
+      }
+
+      const inputs: PerfInputs = {
+        personalRating: r.personalRating ?? null,
+        professionalRating: r.professionalRating ?? null,
+        meetingsTotal: r.meetingsTotal ?? 0,
+        meetingsAttended: r.meetingsAttended ?? 0,
+        deliverablesAssigned: r.deliverablesAssigned ?? 0,
+        deliverablesAnswered: r.deliverablesAnswered ?? 0,
+        submittedAt: r.submittedAt ?? null,
+        cycleDeadline: cycle?.submissionDeadline ?? null,
+        isFlagged: r.isFlagged ?? false,
+        manualScores,
+      }
+
+      const result = calculateFinalScore(kpiConfigs, inputs)
+
       map[r.user.toString()] = {
-        quantitativeRating:   r.quantitativeRating,
-        deliverablesAssigned: r.deliverablesAssigned,
-        deliverablesAnswered: r.deliverablesAnswered,
-        meetingsTotal:        r.meetingsTotal,
-        meetingsAttended:     r.meetingsAttended,
+        // Keep the old fields so any code still reading them doesn't break
+        personalRating: r.personalRating ?? null,
+        professionalRating: r.professionalRating ?? null,
+        deliverablesAssigned: r.deliverablesAssigned ?? 0,
+        deliverablesAnswered: r.deliverablesAnswered ?? 0,
+        meetingsTotal: inputs.meetingsTotal,
+        meetingsAttended: inputs.meetingsAttended,
+        kpis: r.kpis || [],
+
+        // The computed, auditable result
+        finalScore: result.finalScore,
+        eligible: result.eligible,
+        submissionStatus: result.submissionStatus,
+        breakdown: result.breakdown,
+        flags: result.flags,
       }
     }
 
     return NextResponse.json(map)
-  } catch {
+  } catch (err) {
+    console.error("Failed to fetch performance data:", err)
     return NextResponse.json({ error: "Failed to fetch performance data" }, { status: 500 })
   }
 }

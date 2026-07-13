@@ -89,6 +89,7 @@ const performanceRecordSchema = new mongoose.Schema(
         {
           name: { type: String, required: true, trim: true, maxlength: 100 },
           weight: { type: Number, required: true, min: 0, max: 100 },
+          score: { type: Number, default: 0 },
         },
       ],
       default: buildDefaultKpiConfig,

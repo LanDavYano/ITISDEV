@@ -221,19 +221,30 @@ const STYLES = `
 
 // ─── PerfBar ──────────────────────────────────────────────────────────────────
 
-function PerfBar({ perf }: { perf: PerfSummary | undefined }) {
+function PerfBar({ perf }: { perf: any }) {
   if (!perf) return <span style={{ color: "#ccc", fontSize: 13 }}>No submission</span>;
 
-  const rating = perf.quantitativeRating;
-  const score = rating !== null
-    ? rating
-    : perf.deliverablesAssigned > 0
-      ? Math.round((perf.deliverablesAnswered / perf.deliverablesAssigned) * 100)
-      : null;
+  let score = null;
 
-  if (score === null) return <span style={{ color: "#ccc", fontSize: 13 }}>—</span>;
+  if (perf.kpis && Array.isArray(perf.kpis) && perf.kpis.length > 0) {
+    score = perf.kpis.reduce((total: number, kpi: any) => {
+       return total + (kpi.score || 0);
+    }, 0);
+    score = Math.round(score);
+  } else {
+    const rating = perf.quantitativeRating;
+    score = rating !== null
+      ? rating
+      : perf.deliverablesAssigned > 0
+        ? Math.round((perf.deliverablesAnswered / perf.deliverablesAssigned) * 100)
+        : null;
+  }
+
+  // If score is exactly 0, it means the form hasn't been filled out yet
+  if (score === null || score === 0) return <span style={{ color: "red", fontSize: 13 }}>Incomplete</span>;
 
   const fillClass = score >= 70 ? "excellent" : score >= 40 ? "warning" : "danger";
+  
   return (
     <div className="perf">
       <div className="perf-bar-bg">
