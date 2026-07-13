@@ -40,6 +40,7 @@ interface Cycle {
   periodYear: number;
   submissionDeadline: string;
   isOpen: boolean;
+  canExtend?: boolean;
 }
 
 interface KpiBreakdownEntry {
@@ -996,14 +997,6 @@ interface AnnouncementModalProps {
   showToast: (msg: string, type: "success" | "error") => void;
 }
 
-/** Convert an ISO date to the value format datetime-local inputs expect. */
-const toLocalInputValue = (iso: string | null | undefined) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
 function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: AnnouncementModalProps) {
   const [title, setTitle] = useState(announcement?.title ?? "");
   const [content, setContent] = useState(announcement?.content ?? "");
@@ -1091,6 +1084,16 @@ function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline";
+
+function toLocalInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  const timezoneOffset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - timezoneOffset * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -1110,7 +1113,7 @@ export default function AdminPage() {
   const [editingMember, setEditingMember]   = useState<PopulatedMember | null>(null);
   const [toast, setToast]                   = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [broadcastMsg, setBroadcastMsg]     = useState("");
-  const [activeTab, setActiveTab]           = useState<"dashboard" | "members" | "kpi" | "departments" | "announcements">("dashboard");
+  const [activeTab, setActiveTab]           = useState<AdminTab>("dashboard");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [annLogs, setAnnLogs] = useState<AnnouncementLogItem[]>([]);
@@ -1135,6 +1138,8 @@ export default function AdminPage() {
   const [showSubDeptModal, setShowSubDeptModal] = useState(false);
   const [subDeptModalMode, setSubDeptModalMode] = useState<"add" | "edit">("add");
   const [editingSubDept, setEditingSubDept] = useState<SubDepartmentItem | null>(null);
+  const [deadlineInput, setDeadlineInput] = useState("");
+  const [deadlineActionBusy, setDeadlineActionBusy] = useState(false);
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
 
@@ -1297,6 +1302,59 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeadlineAction = async (action: "update" | "extend" | "open" | "close") => {
+    if (!currentCycle?._id) {
+      showToast("No active cycle is available.", "error");
+      return;
+    }
+
+    setDeadlineActionBusy(true);
+    try {
+      let endpoint = `/api/cycles/${currentCycle._id}`;
+      let payload: Record<string, string> | undefined;
+
+      if (action === "update" || action === "extend") {
+        const nextDeadline = new Date(deadlineInput);
+        if (Number.isNaN(nextDeadline.getTime())) {
+          throw new Error("Please select a valid deadline.");
+        }
+        endpoint = action === "update"
+          ? `/api/cycles/${currentCycle._id}/deadline`
+          : `/api/cycles/${currentCycle._id}/extend`;
+        payload = { submissionDeadline: nextDeadline.toISOString() };
+      } else if (action === "open") {
+        endpoint = `/api/cycles/${currentCycle._id}/open`;
+      } else {
+        endpoint = `/api/cycles/${currentCycle._id}/close`;
+      }
+
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: payload ? { "Content-Type": "application/json" } : undefined,
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to update cycle.");
+
+      setCurrentCycle(data);
+      showToast(
+        action === "update"
+          ? "Deadline updated."
+          : action === "extend"
+            ? "Deadline extended."
+            : action === "open"
+              ? "Cycle reopened."
+              : "Cycle closed.",
+        "success"
+      );
+      fetchCycleAndPerf();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setDeadlineActionBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") {
@@ -1313,10 +1371,16 @@ export default function AdminPage() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements") {
-      setActiveTab(tab as typeof activeTab);
+    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements" || tab === "deadline") {
+      setActiveTab(tab as AdminTab);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (currentCycle) {
+      setDeadlineInput(toLocalInputValue(currentCycle.submissionDeadline));
+    }
+  }, [currentCycle]);
 
   // Lightweight polling while the Department Management tab is open so
   // changes made from another device/session show up without a manual refresh.
@@ -1529,8 +1593,11 @@ export default function AdminPage() {
                 Announcements
               </li>
               <li
-                className="menu-item"
-                onClick={() => router.push("/admin/deadline")}
+                className={`menu-item${activeTab === "deadline" ? " active" : ""}`}
+                onClick={() => {
+                  setActiveTab("deadline");
+                  router.replace("/admin?tab=deadline");
+                }}
               >
                 Deadline Management
               </li>
@@ -1591,7 +1658,9 @@ export default function AdminPage() {
                         ? "KPI Configuration."
                         : activeTab === "departments"
                           ? "Department Management."
-                          : "System Announcements."}
+                          : activeTab === "deadline"
+                            ? "Deadline Management."
+                            : "System Announcements."}
                 </h1>
               </div>
               <div className="intro-actions">
@@ -1619,7 +1688,10 @@ export default function AdminPage() {
                   <>
                     <button
                       className="btn-action primary"
-                      onClick={() => router.push("/admin/deadline")}
+                      onClick={() => {
+                        setActiveTab("deadline");
+                        router.replace("/admin?tab=deadline");
+                      }}
                     >
                       Manage Deadlines
                     </button>
@@ -1709,6 +1781,96 @@ export default function AdminPage() {
                 <div className="metric-label">Pending Submissions This Period</div>
               </div>
             </div>
+
+            {activeTab === "deadline" && (
+              <div className="content-table">
+                <div className="table-header">
+                  <div>
+                    <h2 className="table-title">Current Cycle Controls</h2>
+                    <p style={{ fontSize: 13, color: "var(--text-sub)", marginTop: 4 }}>
+                      Review the active cycle, update the deadline, and reopen or close submissions from one place.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1.1fr 0.9fr" }}>
+                  <div className="widget-card" style={{ boxShadow: "none", padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: 0.5 }}>Current cycle</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{currentCycleLabel}</div>
+                      </div>
+                      <span className={`status-pill ${currentCycle?.isOpen ? "success" : "warning"}`}>
+                        {currentCycle?.isOpen ? "Open" : "Closed"}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 10, fontSize: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ color: "var(--text-sub)" }}>Submission deadline</span>
+                        <strong>{currentCycle ? formatDeadlineShort(currentCycle.submissionDeadline) : "—"}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ color: "var(--text-sub)" }}>Eligibility</span>
+                        <strong>{currentCycle?.isOpen ? "Accepting submissions" : "Locked"}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ color: "var(--text-sub)" }}>Can extend</span>
+                        <strong>{currentCycle?.canExtend ? "Yes" : "No"}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="widget-card" style={{ boxShadow: "none", padding: 20 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Update deadline</div>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }} htmlFor="deadline-input">
+                      New submission deadline
+                    </label>
+                    <input
+                      id="deadline-input"
+                      type="datetime-local"
+                      value={deadlineInput}
+                      onChange={(event) => setDeadlineInput(event.target.value)}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14 }}
+                    />
+
+                    <div className="row-actions" style={{ marginTop: 12, flexWrap: "wrap" }}>
+                      <button
+                        className="btn-action primary"
+                        onClick={() => handleDeadlineAction("update")}
+                        disabled={deadlineActionBusy || !currentCycle}
+                      >
+                        {deadlineActionBusy ? "Saving…" : "Save Deadline"}
+                      </button>
+                      <button
+                        className="btn-action secondary"
+                        onClick={() => handleDeadlineAction("extend")}
+                        disabled={deadlineActionBusy || !currentCycle || !currentCycle.canExtend}
+                      >
+                        Extend Deadline
+                      </button>
+                    </div>
+
+                    <div className="row-actions" style={{ marginTop: 12, flexWrap: "wrap" }}>
+                      <button
+                        className="btn-action secondary"
+                        onClick={() => handleDeadlineAction("open")}
+                        disabled={deadlineActionBusy || !currentCycle || currentCycle.isOpen}
+                      >
+                        Re-open Cycle
+                      </button>
+                      <button
+                        className="btn-action primary"
+                        onClick={() => handleDeadlineAction("close")}
+                        disabled={deadlineActionBusy || !currentCycle || !currentCycle.isOpen}
+                      >
+                        Close Cycle
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── LC Dashboard tab ── */}
             {activeTab === "dashboard" && (
