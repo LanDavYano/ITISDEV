@@ -217,7 +217,7 @@ async function seed() {
     periodMonth,
     periodYear,
     personalGoal: "Improve my time management and finish tasks ahead of deadlines.",
-    professionalGoal: "Onboard two new members and lead one EP consultation call.",
+    professionalGoal: "Onboard two new members and lead one EP consultation call this cycle.",
     personalRating: 85,
     professionalRating: 88,
     submittedAt: new Date(),

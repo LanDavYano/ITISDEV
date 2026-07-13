@@ -76,8 +76,8 @@ const performanceRecordSchema = new mongoose.Schema(
     },
 
     // ── Qualitative Answers (member-submitted, string) ──────────────────────
-    personalGoal: { type: String, trim: true, maxlength: 2000, default: null },
-    professionalGoal: { type: String, trim: true, maxlength: 2000, default: null },
+    personalGoal: { type: String, trim: true, minlength: 60, maxlength: 2000, default: null },
+    professionalGoal: { type: String, trim: true, minlength: 60, maxlength: 2000, default: null },
 
     // ── Quantitative Answers (member-submitted, 0–100) ──────────────────────
     personalRating: { type: Number, min: 0, max: 100, default: null },

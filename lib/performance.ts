@@ -78,6 +78,8 @@ export function validateMemberSubmission(body: any): string | null {
   const professionalGoal = typeof body.professionalGoal === "string" ? body.professionalGoal.trim() : ""
   if (!personalGoal) return "Personal goal is required."
   if (!professionalGoal) return "Professional goal is required."
+  if (personalGoal.length < 60 || professionalGoal.length < 60)
+    return "Goals must be at least 60 characters."
   if (personalGoal.length > 2000 || professionalGoal.length > 2000)
     return "Goals must be 2000 characters or fewer."
 

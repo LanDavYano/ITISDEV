@@ -93,6 +93,8 @@ export default function PerformanceSubmissionPage() {
   const validate = (): string | null => {
     if (!form.personalGoal.trim()) return "Personal goal is required."
     if (!form.professionalGoal.trim()) return "Professional goal is required."
+    if (form.personalGoal.trim().length < 60 || form.professionalGoal.trim().length < 60)
+      return "Goals must be at least 60 characters."
     for (const [label, value] of [
       ["Personal rating", form.personalRating],
       ["Professional rating", form.professionalRating],
@@ -387,11 +389,15 @@ export default function PerformanceSubmissionPage() {
                 id="personalGoal"
                 required
                 rows={3}
+                minLength={60}
                 maxLength={2000}
                 placeholder="e.g. Improve my time management and finish tasks ahead of deadlines."
                 value={form.personalGoal}
                 onChange={(e) => setForm((f) => ({ ...f, personalGoal: e.target.value }))}
               />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {form.personalGoal.trim().length}/60 characters minimum
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -400,11 +406,15 @@ export default function PerformanceSubmissionPage() {
                 id="professionalGoal"
                 required
                 rows={3}
+                minLength={60}
                 maxLength={2000}
                 placeholder="e.g. Onboard two new members and lead one EP consultation call."
                 value={form.professionalGoal}
                 onChange={(e) => setForm((f) => ({ ...f, professionalGoal: e.target.value }))}
               />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {form.professionalGoal.trim().length}/60 characters minimum
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
