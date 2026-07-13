@@ -1466,28 +1466,6 @@ export default function AdminPage() {
             <div className="sidebar-logo">
               AIESEC <span style={{ fontWeight: 400, fontSize: 14, color: "#666" }}>PM Admin</span>
             </div>
-<<<<<<< HEAD
-            <ul className="dl-menu">
-              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=dashboard")}>
-                LC Dashboard
-              </li>
-              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=members")}>
-                Member Management
-              </li>
-              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=kpi")}>
-                KPI Configuration
-              </li>
-              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=departments")}>
-                Department Management
-              </li>
-              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=announcements")}>
-                Announcements
-              </li>
-              <li className="dl-menu-item active">
-                Deadline Management
-              </li>
-              <li className="dl-menu-item" onClick={() => router.push("/team")}>
-=======
             <ul className="sidebar-menu">
               <li
                 className={`menu-item${activeTab === "dashboard" ? " active" : ""}`}
@@ -1529,7 +1507,6 @@ export default function AdminPage() {
                 className="menu-item"
                 onClick={() => router.push("/team")}
               >
->>>>>>> 4480ada (added the rating breakdown and calculations)
                 Team Records
               </li>
             </ul>
