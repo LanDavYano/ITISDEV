@@ -1,31 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { validateKpiConfig, type KpiConfig as KpiConfigShape } from "@/lib/scoring"
 
-const DEFAULT_KPI_CONFIG = [
-  { name: "Performance Score", weight: 35 },
-  { name: "Engagement", weight: 35 },
-  { name: "Evaluation", weight: 15 },
-  { name: "Timeliness", weight: 5 },
-  { name: "VP Rating", weight: 10 },
-]
+const VALID_SOURCES = ["rating", "attendance", "deliverables", "timeliness", "manual"]
+const VALID_POLICIES = ["exclude", "flag", "default"]
 
-function normalizeKpis(input: unknown) {
+function normalizeKpis(input: unknown): KpiConfigShape[] | null {
   if (!Array.isArray(input)) return null
-  const normalized = input
-    .map((entry: any) => ({
-      name: typeof entry?.name === "string" ? entry.name.trim() : "",
-      weight: Number(entry?.weight),
-    }))
-    .filter((entry) => entry.name)
 
-  if (normalized.length === 0) return null
-  if (normalized.some((entry) => !Number.isFinite(entry.weight) || entry.weight <= 0)) return null
+  const normalized: KpiConfigShape[] = input.map((entry: any) => ({
+    name: typeof entry?.name === "string" ? entry.name.trim() : "",
+    weight: Number(entry?.weight),
+    source: entry?.source,
+    required: Boolean(entry?.required),
+    cutoff: entry?.cutoff != null ? Number(entry.cutoff) : undefined,
+    missingPolicy: entry?.missingPolicy,
+    defaultValue: entry?.defaultValue != null ? Number(entry.defaultValue) : undefined,
+  }))
 
-  const total = normalized.reduce((sum, entry) => sum + entry.weight, 0)
-  if (Math.abs(total - 100) > 0.001) return null
+  if (normalized.some((k) => !k.name)) return null
+  if (normalized.some((k) => !VALID_SOURCES.includes(k.source))) return null
+  if (normalized.some((k) => !VALID_POLICIES.includes(k.missingPolicy))) return null
+
+  const errors = validateKpiConfig(normalized)
+  if (errors.length > 0) return null
 
   return normalized
+}
+
+async function getCurrentCycle() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { EvaluationCycle } = require("@/database")
+  return EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
 }
 
 export async function GET() {
@@ -34,16 +41,19 @@ export async function GET() {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, PerformanceRecord } = require("@/database")
+    const { connectDB } = require("@/database")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const KpiConfig = require("@/database/KpiConfig")
     await connectDB()
 
-    const record = await PerformanceRecord.findOne({
-      user: session.user.id,
-    }).sort({ createdAt: -1 })
+    const cycle = await getCurrentCycle()
+    const periodMonth = cycle?.periodMonth ?? new Date().toLocaleString("en-US", { month: "long" })
+    const periodYear = cycle?.periodYear ?? new Date().getFullYear()
 
-    const kpis = record?.kpis?.length ? record.kpis : DEFAULT_KPI_CONFIG
+    const config = await KpiConfig.findOne({ periodMonth, periodYear })
+    const kpis = config?.kpis?.length ? config.kpis : KpiConfig.DEFAULT_KPI_CONFIG
 
-    return NextResponse.json({ kpis }, { status: 200 })
+    return NextResponse.json({ kpis, periodMonth, periodYear }, { status: 200 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to load KPI config" }, { status: 500 })
   }
@@ -61,33 +71,31 @@ export async function POST(req: NextRequest) {
     const kpis = normalizeKpis(body?.kpis)
 
     if (!kpis) {
-      return NextResponse.json({ error: "Provide valid KPI names and weights that total 100%" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Provide valid KPI entries (name, weight, source, missingPolicy) that total 100%" },
+        { status: 400 }
+      )
     }
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, PerformanceRecord } = require("@/database")
+    const { connectDB } = require("@/database")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const KpiConfig = require("@/database/KpiConfig")
     await connectDB()
 
-    const currentCycle = await require("@/database").EvaluationCycle
-      .findOne()
-      .sort({ createdAt: -1, updatedAt: -1 })
+    const cycle = await getCurrentCycle()
+    const periodMonth = cycle?.periodMonth ?? new Date().toLocaleString("en-US", { month: "long" })
+    const periodYear = cycle?.periodYear ?? new Date().getFullYear()
 
-    const record = await PerformanceRecord.findOne({ user: session.user.id }).sort({ createdAt: -1 })
+    // Upsert: this is THE config for the period — every member's score
+    // recalculation (see /api/admin/performance) reads from here.
+    const config = await KpiConfig.findOneAndUpdate(
+      { periodMonth, periodYear },
+      { periodMonth, periodYear, kpis },
+      { new: true, upsert: true, runValidators: true }
+    )
 
-    if (record) {
-      record.kpis = kpis
-      await record.save()
-      return NextResponse.json({ kpis: record.kpis }, { status: 200 })
-    }
-
-    const created = await PerformanceRecord.create({
-      user: session.user.id,
-      periodMonth: currentCycle?.periodMonth || new Date().toLocaleString("en-US", { month: "long" }),
-      periodYear: currentCycle?.periodYear || new Date().getFullYear(),
-      kpis,
-    })
-
-    return NextResponse.json({ kpis: created.kpis }, { status: 201 })
+    return NextResponse.json({ kpis: config.kpis, periodMonth, periodYear }, { status: 200 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to save KPI config" }, { status: 500 })
   }

@@ -42,12 +42,29 @@ interface Cycle {
   isOpen: boolean;
 }
 
+interface KpiBreakdownEntry {
+  kpiId: string;
+  name: string;
+  source: "rating" | "attendance" | "deliverables" | "timeliness" | "manual";
+  weight: number;
+  rawValue: number | null;
+  normalizedScore: number | null;
+  weightedContribution: number;
+  status: "ok" | "missing-excluded" | "missing-flagged" | "missing-defaulted" | "below-cutoff";
+}
+
 interface PerfSummary {
-  quantitativeRating: number | null;
+  personalRating: number | null;
+  professionalRating: number | null;
   deliverablesAssigned: number;
   deliverablesAnswered: number;
   meetingsTotal: number;
   meetingsAttended: number;
+  finalScore: number | null;
+  eligible: boolean;
+  submissionStatus: "Submitted" | "Submitted with flags" | "Not submitted";
+  breakdown: KpiBreakdownEntry[];
+  flags: string[];
 }
 
 interface Submission {
@@ -221,25 +238,104 @@ const STYLES = `
 
 // ─── PerfBar ──────────────────────────────────────────────────────────────────
 
-function PerfBar({ perf }: { perf: PerfSummary | undefined }) {
+function PerfBar({ perf, onShowBreakdown }: { perf: PerfSummary | undefined; onShowBreakdown?: () => void }) {
   if (!perf) return <span style={{ color: "#ccc", fontSize: 13 }}>No submission</span>;
 
-  const rating = perf.quantitativeRating;
-  const score = rating !== null
-    ? rating
-    : perf.deliverablesAssigned > 0
-      ? Math.round((perf.deliverablesAnswered / perf.deliverablesAssigned) * 100)
-      : null;
+  const score = perf.finalScore;
 
-  if (score === null) return <span style={{ color: "#ccc", fontSize: 13 }}>—</span>;
+  // null = no KPIs could be scored at all (e.g. not submitted and every
+  // KPI is set to "exclude" on missing data). Distinct from 0%, which is a
+  // real, computed low score and should still show as a real score.
+  if (score === null) {
+    return <span style={{ color: "red", fontSize: 13 }}>Incomplete</span>;
+  }
 
   const fillClass = score >= 70 ? "excellent" : score >= 40 ? "warning" : "danger";
+
   return (
-    <div className="perf">
+    <div
+      className="perf"
+      onClick={onShowBreakdown}
+      style={{ cursor: onShowBreakdown ? "pointer" : "default" }}
+      title="Click to view KPI breakdown"
+    >
       <div className="perf-bar-bg">
         <div className={`perf-bar-fill ${fillClass}`} style={{ width: `${score}%` }} />
       </div>
       <span className="perf-score">{score}%</span>
+      {!perf.eligible && (
+        <span style={{ color: "var(--warning-yellow)", fontSize: 12 }} title={perf.flags.join("; ")}>
+          {" "}⚠
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── KPI Breakdown Modal ────────────────────────────────────────────────────
+
+function KpiBreakdownModal({
+  memberName,
+  perf,
+  onClose,
+}: {
+  memberName: string;
+  perf: PerfSummary;
+  onClose: () => void;
+}) {
+  const statusLabel: Record<KpiBreakdownEntry["status"], string> = {
+    ok: "OK",
+    "missing-excluded": "Missing (excluded)",
+    "missing-flagged": "Missing (flagged)",
+    "missing-defaulted": "Missing (defaulted)",
+    "below-cutoff": "Below cutoff",
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">{memberName} — score breakdown</div>
+        <div style={{ fontSize: 13, color: "var(--text-sub)", marginBottom: 16 }}>
+          Final score: <strong>{perf.finalScore ?? "—"}%</strong>{" "}
+          {!perf.eligible && <span style={{ color: "var(--warning-yellow)" }}>(ineligible)</span>}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 1fr 1.4fr", gap: 10, paddingBottom: 10, borderBottom: "1px solid var(--border-color)", fontSize: 11, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase" }}>
+          <div>KPI</div>
+          <div>Weight</div>
+          <div>Raw</div>
+          <div>Normalized</div>
+          <div>Status</div>
+        </div>
+
+        {perf.breakdown.map((entry) => (
+          <div key={entry.kpiId} style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 1fr 1.4fr", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--secondary-bg)", fontSize: 13, alignItems: "center" }}>
+            <div style={{ fontWeight: 600 }}>
+              {entry.name}
+              <div className="member-subtext">{entry.source}</div>
+            </div>
+            <div>{entry.weight}%</div>
+            <div>{entry.rawValue ?? "—"}</div>
+            <div>{entry.normalizedScore ?? "—"}{entry.normalizedScore != null ? "%" : ""}</div>
+            <div style={{ color: entry.status === "ok" ? "var(--success-green)" : "var(--warning-yellow)" }}>
+              {statusLabel[entry.status]}
+            </div>
+          </div>
+        ))}
+
+        {perf.flags.length > 0 && (
+          <div style={{ marginTop: 16, fontSize: 13 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Flags</div>
+            <ul style={{ paddingLeft: 18, color: "var(--text-sub)" }}>
+              {perf.flags.map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1004,6 +1100,7 @@ export default function AdminPage() {
   const [stats, setStats]                   = useState<Stats | null>(null);
   const [currentCycle, setCurrentCycle]     = useState<Cycle | null>(null);
   const [performanceMap, setPerformanceMap] = useState<Record<string, PerfSummary>>({});
+  const [breakdownMember, setBreakdownMember] = useState<{ id: string; name: string } | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingStats, setLoadingStats]     = useState(true);
   const [removingId, setRemovingId]         = useState<string | null>(null);
@@ -1335,6 +1432,13 @@ export default function AdminPage() {
           onClose={() => setShowKpiModal(false)}
           onSaved={() => fetchKpis()}
           showToast={showToast}
+        />
+      )}
+      {breakdownMember && performanceMap[breakdownMember.id] && (
+        <KpiBreakdownModal
+          memberName={breakdownMember.name}
+          perf={performanceMap[breakdownMember.id]}
+          onClose={() => setBreakdownMember(null)}
         />
       )}
       {showDeptModal && (
@@ -1811,7 +1915,14 @@ export default function AdminPage() {
                           </div>
 
                           <div className="table-cell">
-                            <PerfBar perf={performanceMap[m._id]} />
+                            <PerfBar
+                              perf={performanceMap[m._id]}
+                              onShowBreakdown={
+                                performanceMap[m._id]
+                                  ? () => setBreakdownMember({ id: m._id, name: `${m.firstName} ${m.lastName}` })
+                                  : undefined
+                              }
+                            />
                           </div>
 
                           <div className="table-cell">
