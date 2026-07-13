@@ -4,9 +4,10 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { voluntaryLogout } from '@/lib/logout';
+import NotificationBell from '@/components/notification-bell';
 import {
   LayoutDashboard, Globe, ListChecks, MessageSquare, FileText,
-  Settings, HelpCircle, Search, Bell, Plus, Tag, Clock,
+  Settings, HelpCircle, Search, Plus, Tag, Clock,
   BarChart3, ChevronDown, Check, X, AlertCircle,
   User as UserIcon, LogOut, Users, CheckCircle2, Timer, CalendarClock,
 } from 'lucide-react';
@@ -374,13 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => handleNav('/chats')}
-              className="relative text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-pink-500 rounded-full border-2 border-white dark:border-gray-900" />
-            </button>
+            <NotificationBell />
 
             {/* Profile dropdown */}
             <div ref={profileRef} className="relative">
