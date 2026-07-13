@@ -44,6 +44,17 @@ export async function PATCH(
       update.deptLeader = null
     }
 
+    if (!("deptLeader" in body)) {
+      const { Role, User } = require("@/database")
+      const leaderRole = await Role.findOne({ level: 3 }).select("_id").lean()
+      const resolvedLeader = leaderRole
+        ? await User.findOne({ role: leaderRole._id, department: params.id })
+            .select("_id")
+            .lean()
+        : null
+      update.deptLeader = resolvedLeader?._id ?? null
+    }
+
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
     }

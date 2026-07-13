@@ -66,16 +66,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Selected department does not exist" }, { status: 400 })
     }
 
+    const { User, Role } = require("@/database")
+
     const created = await SubDepartment.create({
       name,
       department,
       description: description ?? "",
       memberCapacity: memberCapacity === "" || memberCapacity == null ? null : Number(memberCapacity),
-      subDeptLeader: subDeptLeader || null,
+      subDeptLeader: null,
     })
 
+    const leaderRole = await Role.findOne({ level: 2 }).select("_id").lean()
+    const resolvedLeader = leaderRole
+      ? await User.findOne({ role: leaderRole._id, subDepartment: created._id, department })
+          .select("_id")
+          .lean()
+      : null
+
+    const updated = await SubDepartment.findByIdAndUpdate(
+      created._id,
+      { $set: { subDeptLeader: resolvedLeader?._id ?? null } },
+      { new: true, runValidators: true }
+    ).lean()
+
     return NextResponse.json(
-      { message: "Sub-department created", id: created._id.toString() },
+      {
+        message: "Sub-department created",
+        id: created._id.toString(),
+        subDepartment: updated,
+      },
       { status: 201 }
     )
   } catch (err: any) {

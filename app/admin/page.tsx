@@ -743,10 +743,14 @@ function DepartmentModal({ mode, department, members, onClose, onSaved, showToas
         </div>
         <div className="form-field">
           <label>Department Leader</label>
-          <select value={form.deptLeaderId} onChange={set("deptLeaderId")}>
-            <option value="">None</option>
-            {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName}</option>)}
-          </select>
+          <div style={{ padding: "9px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, color: "#374151", background: "#f9fafb" }}>
+            {mode === "edit" && department?.deptLeader
+              ? `${department.deptLeader.firstName} ${department.deptLeader.lastName}`
+              : "Auto-assigned from the matching Leader of Department account"}
+          </div>
+          <span style={{ fontSize: 11, color: "var(--text-sub)" }}>
+            The system resolves this automatically from the user record with the department leader role in this department.
+          </span>
         </div>
         <div className="form-field">
           <label>Description</label>
@@ -856,10 +860,14 @@ function SubDepartmentModal({ mode, subDepartment, departments, members, onClose
           </div>
           <div className="form-field">
             <label>Sub-Department Leader</label>
-            <select value={form.subDeptLeaderId} onChange={set("subDeptLeaderId")}>
-              <option value="">None</option>
-              {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName}</option>)}
-            </select>
+            <div style={{ padding: "9px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, color: "#374151", background: "#f9fafb" }}>
+              {mode === "edit" && subDepartment?.subDeptLeader
+                ? `${subDepartment.subDeptLeader.firstName} ${subDepartment.subDeptLeader.lastName}`
+                : "Auto-assigned from the matching Team Leader account"}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-sub)" }}>
+              The system resolves this automatically from the matching sub-department leader account.
+            </span>
           </div>
         </div>
         <div className="form-field">

@@ -58,16 +58,35 @@ export async function POST(req: NextRequest) {
     const { connectDB, Department } = require("@/database")
     await connectDB()
 
+    const { User, Role } = require("@/database")
+
     const created = await Department.create({
       name,
       officeType,
       description: description ?? "",
       memberCapacity: memberCapacity === "" || memberCapacity == null ? null : Number(memberCapacity),
-      deptLeader: deptLeader || null,
+      deptLeader: null,
     })
 
+    const leaderRole = await Role.findOne({ level: 3 }).select("_id").lean()
+    const resolvedLeader = leaderRole
+      ? await User.findOne({ role: leaderRole._id, department: created._id })
+          .select("_id")
+          .lean()
+      : null
+
+    const updated = await Department.findByIdAndUpdate(
+      created._id,
+      { $set: { deptLeader: resolvedLeader?._id ?? null } },
+      { new: true, runValidators: true }
+    ).lean()
+
     return NextResponse.json(
-      { message: "Department created", id: created._id.toString() },
+      {
+        message: "Department created",
+        id: created._id.toString(),
+        department: updated,
+      },
       { status: 201 }
     )
   } catch (err: any) {

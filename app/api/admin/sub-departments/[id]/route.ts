@@ -44,6 +44,18 @@ export async function PATCH(
       update.subDeptLeader = null
     }
 
+    if (!("subDeptLeader" in body)) {
+      const { Role, User, SubDepartment } = require("@/database")
+      const existing = await SubDepartment.findById(params.id).select("department").lean()
+      const leaderRole = await Role.findOne({ level: 2 }).select("_id").lean()
+      const resolvedLeader = leaderRole
+        ? await User.findOne({ role: leaderRole._id, subDepartment: params.id, department: existing?.department })
+            .select("_id")
+            .lean()
+        : null
+      update.subDeptLeader = resolvedLeader?._id ?? null
+    }
+
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
     }
