@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { voluntaryLogout } from "@/lib/logout";
 import AnnouncementsModal from "@/components/announcements-modal";
 
@@ -990,6 +990,7 @@ function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [members, setMembers]               = useState<PopulatedMember[]>([]);
   const [stats, setStats]                   = useState<Stats | null>(null);
@@ -1205,6 +1206,13 @@ export default function AdminPage() {
     }
   }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments, fetchAnnouncements]);
 
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements") {
+      setActiveTab(tab as typeof activeTab);
+    }
+  }, [searchParams]);
+
   // Lightweight polling while the Department Management tab is open so
   // changes made from another device/session show up without a manual refresh.
   useEffect(() => {
@@ -1365,31 +1373,46 @@ export default function AdminPage() {
             <ul className="sidebar-menu">
               <li
                 className={`menu-item${activeTab === "dashboard" ? " active" : ""}`}
-                onClick={() => setActiveTab("dashboard")}
+                onClick={() => {
+                  setActiveTab("dashboard")
+                  router.replace("/admin?tab=dashboard")
+                }}
               >
                 LC Dashboard
               </li>
               <li
                 className={`menu-item${activeTab === "members" ? " active" : ""}`}
-                onClick={() => setActiveTab("members")}
+                onClick={() => {
+                  setActiveTab("members")
+                  router.replace("/admin?tab=members")
+                }}
               >
                 Member Management
               </li>
               <li
                 className={`menu-item${activeTab === "kpi" ? " active" : ""}`}
-                onClick={() => setActiveTab("kpi")}
+                onClick={() => {
+                  setActiveTab("kpi")
+                  router.replace("/admin?tab=kpi")
+                }}
               >
                 KPI Configuration
               </li>
               <li
                 className={`menu-item${activeTab === "departments" ? " active" : ""}`}
-                onClick={() => setActiveTab("departments")}
+                onClick={() => {
+                  setActiveTab("departments")
+                  router.replace("/admin?tab=departments")
+                }}
               >
                 Department Management
               </li>
               <li
                 className={`menu-item${activeTab === "announcements" ? " active" : ""}`}
-                onClick={() => setActiveTab("announcements")}
+                onClick={() => {
+                  setActiveTab("announcements")
+                  router.replace("/admin?tab=announcements")
+                }}
               >
                 Announcements
               </li>

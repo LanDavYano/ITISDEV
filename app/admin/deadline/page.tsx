@@ -354,16 +354,25 @@ export default function DeadlineManagementPage() {
               AIESEC <span style={{ fontWeight: 400, fontSize: 14, color: "#666" }}>PM Admin</span>
             </div>
             <ul className="dl-menu">
-              <li className="dl-menu-item" onClick={() => router.push("/admin")}>
+              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=dashboard")}>
                 LC Dashboard
               </li>
-              <li className="dl-menu-item" onClick={() => router.push("/admin")}>
+              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=members")}>
                 Member Management
+              </li>
+              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=kpi")}>
+                KPI Configuration
+              </li>
+              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=departments")}>
+                Department Management
+              </li>
+              <li className="dl-menu-item" onClick={() => router.push("/admin?tab=announcements")}>
+                Announcements
               </li>
               <li className="dl-menu-item active">
                 Deadline Management
               </li>
-              <li className="dl-menu-item" onClick={() => router.push("/team") }>
+              <li className="dl-menu-item" onClick={() => router.push("/team")}>
                 Team Records
               </li>
             </ul>

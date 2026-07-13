@@ -24,12 +24,25 @@ export async function GET() {
 
     const cycle = await getCurrentCycle()
 
-    // Scope everyone with a sub-department to their own team.
-    const me = await User.findById(session.user.id).select("subDepartment")
+    // Scope department leaders to their department, and sub-department leaders
+    // to their own sub-department.
+    const me = await User.findById(session.user.id).select("department subDepartment")
+    const roleLevel = Number(session.user.roleLevel ?? 1)
     const memberFilter: Record<string, any> = {}
-    if (me?.subDepartment) {
-      memberFilter.subDepartment = me.subDepartment
-    } else if ((session.user.roleLevel ?? 1) === 2) {
+
+    if (roleLevel >= 3) {
+      if (me?.department) {
+        memberFilter.department = me.department
+      } else {
+        return NextResponse.json({ cycle: cycleSummary(cycle), team: [] })
+      }
+    } else if (roleLevel === 2) {
+      if (me?.subDepartment) {
+        memberFilter.subDepartment = me.subDepartment
+      } else {
+        return NextResponse.json({ cycle: cycleSummary(cycle), team: [] })
+      }
+    } else {
       return NextResponse.json({ cycle: cycleSummary(cycle), team: [] })
     }
 
