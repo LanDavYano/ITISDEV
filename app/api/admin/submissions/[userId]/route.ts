@@ -135,6 +135,8 @@ export async function PATCH(
       if (field === "personalGoal" || field === "professionalGoal") {
         const value = typeof body[field] === "string" ? body[field].trim() : ""
         if (!value) return NextResponse.json({ error: `${field} cannot be empty.` }, { status: 400 })
+        if (value.length < 60)
+          return NextResponse.json({ error: `${field} must be at least 60 characters.` }, { status: 400 })
         if (value.length > 2000)
           return NextResponse.json({ error: `${field} must be 2000 characters or fewer.` }, { status: 400 })
         updates[field] = value
