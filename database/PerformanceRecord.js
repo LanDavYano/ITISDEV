@@ -44,9 +44,13 @@ const DEFAULT_KPI_CONFIG = [
   { name: "Engagement", weight: 35 },
   { name: "Evaluation", weight: 15 },
   { name: "Timeliness", weight: 5 },
-  { name: "VP Rating", weight: 10 },
 ]
 
+// "VP Rating" is intentionally NOT defaulted onto a new record. It is a
+// manual-source KPI (see KpiConfig.js) — an entry only appears in `kpis`
+// once a VP actually rates the member (see PATCH /api/team/records/[userId]).
+// Defaulting it to a score of 0 would silently drag every unrated member's
+// final score down instead of correctly excluding it as missing data.
 const buildDefaultKpiConfig = () =>
   DEFAULT_KPI_CONFIG.map((kpi) => ({ name: kpi.name, weight: kpi.weight }))
 

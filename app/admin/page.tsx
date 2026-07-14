@@ -273,16 +273,91 @@ function PerfBar({ perf, onShowBreakdown }: { perf: PerfSummary | undefined; onS
   );
 }
 
+// ─── VP Rating editor ───────────────────────────────────────────────────────
+
+function VpRatingEditor({
+  initialValue,
+  canRate,
+  onSave,
+}: {
+  initialValue: number | null;
+  canRate: boolean;
+  onSave: (value: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState<string>(initialValue != null ? String(initialValue) : "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(initialValue != null ? String(initialValue) : "");
+  }, [initialValue]);
+
+  const num = Number(value);
+  const isValid = value.trim() !== "" && Number.isFinite(num) && num >= 0 && num <= 100;
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      await onSave(num);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        margin: "0 0 16px",
+        padding: "12px 14px",
+        background: "var(--secondary-bg)",
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>VP Rating</div>
+        <div style={{ fontSize: 12, color: "var(--text-sub)" }}>
+          {canRate
+            ? "Enter this member's VP rating (0–100)."
+            : "Only this member's VP can submit or update this rating."}
+        </div>
+      </div>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        value={value}
+        disabled={!canRate || saving}
+        onChange={(e) => setValue(e.target.value)}
+        style={{ width: 72, padding: "7px 9px", borderRadius: 6, border: "1px solid var(--border-color)" }}
+      />
+      <button
+        className="btn-action primary"
+        disabled={!canRate || saving || !isValid}
+        onClick={handleSave}
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+}
+
 // ─── KPI Breakdown Modal ────────────────────────────────────────────────────
 
 function KpiBreakdownModal({
   memberName,
   perf,
   onClose,
+  canRateVp,
+  onSaveVpRating,
 }: {
   memberName: string;
   perf: PerfSummary;
   onClose: () => void;
+  canRateVp: boolean;
+  onSaveVpRating: (value: number) => Promise<void>;
 }) {
   const statusLabel: Record<KpiBreakdownEntry["status"], string> = {
     ok: "OK",
@@ -292,6 +367,8 @@ function KpiBreakdownModal({
     "below-cutoff": "Below cutoff",
   };
 
+  const vpRatingEntry = perf.breakdown.find((entry) => entry.name === "VP Rating");
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
@@ -300,6 +377,12 @@ function KpiBreakdownModal({
           Final score: <strong>{perf.finalScore ?? "—"}%</strong>{" "}
           {!perf.eligible && <span style={{ color: "var(--warning-yellow)" }}>(ineligible)</span>}
         </div>
+
+        <VpRatingEditor
+          initialValue={vpRatingEntry?.rawValue ?? null}
+          canRate={canRateVp}
+          onSave={onSaveVpRating}
+        />
 
         <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 1fr 1.4fr", gap: 10, paddingBottom: 10, borderBottom: "1px solid var(--border-color)", fontSize: 11, fontWeight: 600, color: "var(--text-sub)", textTransform: "uppercase" }}>
           <div>KPI</div>
@@ -1142,6 +1225,20 @@ export default function AdminPage() {
   const [deadlineActionBusy, setDeadlineActionBusy] = useState(false);
 
   const isAdmin = (session?.user as any)?.roleLevel >= 3;
+  const myRoleLevel = (session?.user as any)?.roleLevel ?? 1;
+  const mySubDeptName = (session?.user as any)?.subDepartment as string | undefined;
+
+  // A "VP" is a sub-department leader (roleLevel 2) rating members of their
+  // own team, or a department leader (roleLevel 3) who can rate anyone.
+  const canRateVp = useCallback(
+    (member: PopulatedMember | undefined) => {
+      if (!member) return false;
+      if (myRoleLevel >= 3) return true;
+      if (myRoleLevel === 2) return !!mySubDeptName && member.subDepartment?.name === mySubDeptName;
+      return false;
+    },
+    [myRoleLevel, mySubDeptName]
+  );
 
   const showToast = useCallback((msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -1214,6 +1311,28 @@ export default function AdminPage() {
       // non-critical
     }
   }, []);
+
+  const handleSaveVpRating = useCallback(
+    async (memberId: string, score: number) => {
+      try {
+        const res = await fetch(`/api/team/records/${memberId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vpRating: score }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error ?? "Failed to save VP rating", "error");
+          return;
+        }
+        showToast("VP Rating saved", "success");
+        await fetchCycleAndPerf();
+      } catch {
+        showToast("Failed to save VP rating", "error");
+      }
+    },
+    [showToast, fetchCycleAndPerf]
+  );
 
   const fetchSubmissions = useCallback(async () => {
     setLoadingSubmissions(true);
@@ -1503,6 +1622,8 @@ export default function AdminPage() {
           memberName={breakdownMember.name}
           perf={performanceMap[breakdownMember.id]}
           onClose={() => setBreakdownMember(null)}
+          canRateVp={canRateVp(members.find((m) => m._id === breakdownMember.id))}
+          onSaveVpRating={(score) => handleSaveVpRating(breakdownMember.id, score)}
         />
       )}
       {showDeptModal && (
@@ -2103,7 +2224,13 @@ export default function AdminPage() {
                           <div className="table-cell row-actions">
                             <button
                               className="btn-icon"
-                              onClick={() => router.push(`/profile/${m._id}`)}
+                              onClick={() => {
+                                if (performanceMap[m._id]) {
+                                  setBreakdownMember({ id: m._id, name: `${m.firstName} ${m.lastName}` });
+                                } else {
+                                  showToast("No performance data yet for this member.", "error");
+                                }
+                              }}
                             >
                               View
                             </button>
