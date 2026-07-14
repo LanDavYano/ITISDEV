@@ -140,3 +140,6 @@ export const ASSIGNMENT_FIELDS = [
   "meetingsTotal",
   "meetingsAttended",
 ] as const
+
+/** The manual-source KPI name a VP's rating is stored under in PerformanceRecord.kpis. */
+export const VP_RATING_KPI_NAME = "VP Rating"
