@@ -17,6 +17,9 @@ interface PopulatedMember {
   role: { _id?: string; title: string; level: number } | null;
   department: { _id?: string; name: string; officeType: string } | null;
   subDepartment: { _id?: string; name: string } | null;
+  isProbationary?: boolean;
+  probationReason?: string | null;
+  probationStartedAt?: string | null;
 }
 
 interface DeptStatus {
@@ -1235,6 +1238,49 @@ export default function AdminPage() {
     }
   };
 
+  const handleToggleProbation = async (m: PopulatedMember) => {
+    const action = m.isProbationary ? "clear" : "set";
+    let reason = "";
+    if (action === "set") {
+      const input = window.prompt(`Enter reason for placing ${m.firstName} ${m.lastName} on probation:`);
+      if (input === null) return; // user cancelled
+      if (!input.trim()) {
+        showToast("A reason is required to set probation.", "error");
+        return;
+      }
+      reason = input.trim();
+    } else {
+      if (!window.confirm(`Are you sure you want to clear probation for ${m.firstName} ${m.lastName}?`)) return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/members/${m._id}/probation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to update probation status");
+      showToast(data.message ?? "Probation status updated.", "success");
+      fetchMembers();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
+  const handleRunProbationCheck = async () => {
+    if (!window.confirm("Run automatic probation check on all members? This will scan the last 2 closed/archived cycles.")) return;
+    try {
+      const res = await fetch("/api/admin/probation/check", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Auto-check failed");
+      showToast(data.message ?? "Auto-probation check completed.", "success");
+      fetchMembers();
+    } catch (err: unknown) {
+      showToast((err as Error).message, "error");
+    }
+  };
+
   const handleDeleteDepartment = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? Its sub-departments will be removed and any members will be marked Unassigned.`)) return;
     try {
@@ -1487,6 +1533,12 @@ export default function AdminPage() {
                       onClick={() => router.push("/admin/deadline")}
                     >
                       Manage Deadlines
+                    </button>
+                    <button
+                      className={`btn-action secondary${!isAdmin ? " restricted" : ""}`}
+                      onClick={handleRunProbationCheck}
+                    >
+                      Auto Probation Check
                     </button>
                     <button
                       className={`btn-action primary${!isAdmin ? " restricted" : ""}`}
@@ -1754,8 +1806,13 @@ export default function AdminPage() {
                           <div className="table-cell member">
                             <div className={`member-avatar ${avatarClass(m._id)}`} />
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center" }}>
                                 {m.firstName} {m.lastName}
+                                {m.isProbationary && (
+                                  <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", background: "#fee2e2", color: "#991b1b", borderRadius: 4, marginLeft: 6 }} title={m.probationReason ?? "Probationary"}>
+                                    PROBATION
+                                  </span>
+                                )}
                               </div>
                               <div className="member-subtext" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                 {m.email}
@@ -1776,7 +1833,7 @@ export default function AdminPage() {
                               fontSize: 13,
                             }}
                           >
-                            {m.role?.title ?? "—"}
+                            {m.isProbationary ? "PROBATIONARY MEMBER" : (m.role?.title ?? "—")}
                           </div>
 
                           <div className="table-cell">
@@ -1809,6 +1866,16 @@ export default function AdminPage() {
                               onClick={() => { setEditingMember(m); setShowEditModal(true); }}
                             >
                               Edit
+                            </button>
+                            <button
+                              className={`btn-icon${!isAdmin ? " disabled-btn" : ""}`}
+                              style={{
+                                color: !isAdmin ? undefined : m.isProbationary ? "#d97706" : "#4b5563",
+                                borderColor: !isAdmin ? undefined : m.isProbationary ? "#fde68a" : "#d1d5db",
+                              }}
+                              onClick={() => handleToggleProbation(m)}
+                            >
+                              {m.isProbationary ? "Clear Probation" : "Set Probation"}
                             </button>
                             <button
                               className={`btn-icon delete-btn${!isAdmin ? " disabled-btn" : ""}`}

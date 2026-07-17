@@ -95,6 +95,9 @@ export async function GET() {
         roleLevel: me?.role?.level ?? session.user.roleLevel ?? 1,
         department: me?.department?.name ?? session.user.department ?? "",
         subDepartment: me?.subDepartment?.name ?? session.user.subDepartment ?? "",
+        isProbationary: me?.isProbationary ?? false,
+        probationReason: me?.probationReason ?? null,
+        probationStartedAt: me?.probationStartedAt ?? null,
       },
       cycle: cycle
         ? {
