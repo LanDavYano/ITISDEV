@@ -49,6 +49,17 @@ export async function PATCH(_: Request, { params }: { params: { id: string } }) 
     cycle.closedBy = session.user.id
     await cycle.save()
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Deadline Management",
+      action: "close",
+      description: `Manually closed the ${cycle.periodMonth} ${cycle.periodYear} evaluation cycle`,
+      targetType: "EvaluationCycle",
+      targetId: cycle._id.toString(),
+      targetLabel: `${cycle.periodMonth} ${cycle.periodYear}`,
+    })
+
     return NextResponse.json(withState(cycle))
   } catch {
     return NextResponse.json({ error: "Failed to close cycle" }, { status: 500 })

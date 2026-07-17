@@ -121,6 +121,17 @@ export async function POST(req: NextRequest) {
       createdBy: session.user.id,
     })
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Deadline Management",
+      action: "create",
+      description: `Created the ${periodMonth} ${periodYear} evaluation cycle (deadline ${new Date(submissionDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})`,
+      targetType: "EvaluationCycle",
+      targetId: cycle._id.toString(),
+      targetLabel: `${periodMonth} ${periodYear}`,
+    })
+
     return NextResponse.json(
       {
         ...cycle.toObject(),

@@ -1167,7 +1167,21 @@ function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline";
+type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline" | "activity";
+
+interface ActivityLogItem {
+  _id: string;
+  actorName: string;
+  actorRole: string | null;
+  category: string;
+  action: string;
+  description: string;
+  targetLabel: string | null;
+  changes: { field: string; from: unknown; to: unknown }[];
+  device: string | null;
+  ip: string | null;
+  createdAt: string;
+}
 
 function toLocalInputValue(value?: string | null) {
   if (!value) return "";
@@ -1204,6 +1218,10 @@ export default function AdminPage() {
   const [showAnnModal, setShowAnnModal] = useState(false);
   const [annModalMode, setAnnModalMode] = useState<"add" | "edit">("add");
   const [editingAnn, setEditingAnn] = useState<AnnouncementItem | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [activityCategories, setActivityCategories] = useState<string[]>([]);
+  const [activityFilter, setActivityFilter] = useState("All");
+  const [loadingActivity, setLoadingActivity] = useState(false);
   const [kpis, setKpis] = useState<KpiItem[]>([]);
   const [loadingKpis, setLoadingKpis] = useState(false);
   const [showKpiModal, setShowKpiModal] = useState(false);
@@ -1392,6 +1410,22 @@ export default function AdminPage() {
     }
   }, [showToast]);
 
+  const fetchActivity = useCallback(async (category: string, showSpinner = false) => {
+    if (showSpinner) setLoadingActivity(true);
+    try {
+      const res = await fetch(`/api/admin/activity?category=${encodeURIComponent(category)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setActivityLogs(data.logs ?? []);
+        setActivityCategories(data.categories ?? []);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      if (showSpinner) setLoadingActivity(false);
+    }
+  }, []);
+
   const fetchAnnouncements = useCallback(async () => {
     setLoadingAnnouncements(true);
     try {
@@ -1485,12 +1519,22 @@ export default function AdminPage() {
       fetchDepartments();
       fetchSubDepartments();
       fetchAnnouncements();
+      fetchActivity("All", true);
     }
-  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments, fetchAnnouncements]);
+  }, [status, router, fetchMembers, fetchStats, fetchCycleAndPerf, fetchSubmissions, fetchKpis, fetchDepartments, fetchSubDepartments, fetchAnnouncements, fetchActivity]);
+
+  // Real-time activity feed: refetch when the filter changes, and poll while
+  // the tab is open so actions from other devices/sessions appear live.
+  useEffect(() => {
+    if (activeTab !== "activity" || status !== "authenticated") return;
+    fetchActivity(activityFilter, true);
+    const interval = setInterval(() => fetchActivity(activityFilter), 5000);
+    return () => clearInterval(interval);
+  }, [activeTab, activityFilter, status, fetchActivity]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements" || tab === "deadline") {
+    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements" || tab === "deadline" || tab === "activity") {
       setActiveTab(tab as AdminTab);
     }
   }, [searchParams]);
@@ -1723,6 +1767,15 @@ export default function AdminPage() {
                 Deadline Management
               </li>
               <li
+                className={`menu-item${activeTab === "activity" ? " active" : ""}`}
+                onClick={() => {
+                  setActiveTab("activity");
+                  router.replace("/admin?tab=activity");
+                }}
+              >
+                Admin Activity Log
+              </li>
+              <li
                 className="menu-item"
                 onClick={() => router.push("/team")}
               >
@@ -1781,7 +1834,9 @@ export default function AdminPage() {
                           ? "Department Management."
                           : activeTab === "deadline"
                             ? "Deadline Management."
-                            : "System Announcements."}
+                            : activeTab === "activity"
+                              ? "Admin Activity Log."
+                              : "System Announcements."}
                 </h1>
               </div>
               <div className="intro-actions">
@@ -2652,9 +2707,148 @@ export default function AdminPage() {
                 </div>
               </>
             )}
+
+            {/* ── Admin Activity Log tab ── */}
+            {activeTab === "activity" && (
+              <div className="content-table">
+                <div className="table-header" style={{ flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <h2 className="table-title">
+                      Admin Activity Log{" "}
+                      <span style={{ fontSize: 14, fontWeight: 400, color: "#999" }}>
+                        ({activityLogs.length})
+                      </span>
+                    </h2>
+                    <p style={{ fontSize: 12, color: "var(--text-sub)", marginTop: 4 }}>
+                      Every admin action, logged automatically in real time — including
+                      actions from other devices and sessions. Refreshes every 5 seconds.
+                    </p>
+                  </div>
+                  <select
+                    className="filter-dropdown"
+                    value={activityFilter}
+                    onChange={(e) => setActivityFilter(e.target.value)}
+                    style={{ background: "white" }}
+                  >
+                    <option value="All">All Categories</option>
+                    {activityCategories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {loadingActivity ? (
+                  <div className="table-body">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} style={{ padding: "16px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                        <div className="loading-shimmer" style={{ width: "70%" }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : activityLogs.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-sub)" }}>
+                    <h3>No admin activity recorded yet{activityFilter !== "All" ? ` for ${activityFilter}` : ""}.</h3>
+                    <p style={{ fontSize: 13, marginTop: 6 }}>
+                      Actions such as adding members, managing departments, changing
+                      deadlines, or editing submissions will appear here the moment they happen.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="table-body">
+                    {groupLogsByDay(activityLogs).map(({ dayLabel, entries }) => (
+                      <div key={dayLabel}>
+                        {/* Day separator */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "22px 0 10px" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-color)", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                            {dayLabel}
+                          </span>
+                          <div style={{ flex: 1, height: 1, background: "var(--border-color)" }} />
+                          <span style={{ fontSize: 11, color: "var(--text-sub)", whiteSpace: "nowrap" }}>
+                            {entries.length} action{entries.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+
+                        {entries.map((log) => {
+                          const colors = ACTIVITY_CATEGORY_COLORS[log.category] ?? { bg: "#f3f4f6", fg: "#374151" };
+                          return (
+                            <div key={log._id} style={{ display: "flex", gap: 14, padding: "12px 0", borderBottom: "1px solid var(--secondary-bg)" }}>
+                              <div style={{ fontSize: 12, color: "var(--text-sub)", whiteSpace: "nowrap", width: 70, paddingTop: 3 }}>
+                                {new Date(log.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  <span className="status-pill" style={{ background: colors.bg, color: colors.fg }}>
+                                    {log.category}
+                                  </span>
+                                  <span style={{ fontSize: 14, fontWeight: 500 }}>{log.description}</span>
+                                </div>
+                                {log.changes.length > 0 && (
+                                  <ul style={{ listStyle: "none", margin: "6px 0 0", fontSize: 12, color: "var(--text-sub)" }}>
+                                    {log.changes.map((c, i) => (
+                                      <li key={i}>
+                                        <strong style={{ color: "var(--text-color)" }}>{c.field}</strong>:{" "}
+                                        <span style={{ textDecoration: "line-through" }}>{String(c.from ?? "—").slice(0, 50)}</span>
+                                        {" → "}
+                                        <span style={{ color: "var(--text-color)" }}>{String(c.to ?? "—").slice(0, 50)}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div style={{ fontSize: 12, color: "var(--text-sub)", marginTop: 4 }}>
+                                  By <strong>{log.actorName}</strong>
+                                  {log.actorRole ? ` (${log.actorRole})` : ""}
+                                  {log.device ? ` · ${log.device}` : ""}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>
     </div>
   );
+}
+
+// ─── Activity-log presentation helpers ────────────────────────────────────────
+
+const ACTIVITY_CATEGORY_COLORS: Record<string, { bg: string; fg: string }> = {
+  "Member Management":     { bg: "#dbeafe", fg: "#1e40af" },
+  "Department Management": { bg: "#d1fae5", fg: "#065f46" },
+  "Deadline Management":   { bg: "#fef3c7", fg: "#92400e" },
+  "KPI Configuration":     { bg: "#ede9fe", fg: "#5b21b6" },
+  "Announcements":         { bg: "#fce7f3", fg: "#9d174d" },
+  "Performance Records":   { bg: "#e0f2fe", fg: "#0369a1" },
+};
+
+/** Segment a newest-first log list into day buckets: Today / Yesterday / date. */
+function groupLogsByDay(logs: ActivityLogItem[]): { dayLabel: string; entries: ActivityLogItem[] }[] {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const today = startOfDay(new Date());
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  const groups: { dayLabel: string; entries: ActivityLogItem[] }[] = [];
+  let currentKey: number | null = null;
+
+  for (const log of logs) {
+    const day = startOfDay(new Date(log.createdAt));
+    if (day !== currentKey) {
+      currentKey = day;
+      const dayLabel =
+        day === today
+          ? "Today"
+          : day === today - oneDay
+            ? "Yesterday"
+            : new Date(day).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+      groups.push({ dayLabel, entries: [] });
+    }
+    groups[groups.length - 1].entries.push(log);
+  }
+  return groups;
 }

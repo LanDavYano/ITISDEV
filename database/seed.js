@@ -21,6 +21,7 @@ const EvaluationCycle = require("./EvaluationCycle")
 const AuditLog = require("./AuditLog")
 const Announcement = require("./Announcement")
 const AnnouncementLog = require("./AnnouncementLog")
+const AdminActivityLog = require("./AdminActivityLog")
 
 const MONTHS = PerformanceRecord.MONTHS
 
@@ -89,6 +90,7 @@ async function seed() {
   await Promise.all([
     AuditLog.deleteMany({}),
     AnnouncementLog.deleteMany({}),
+    AdminActivityLog.deleteMany({}),
     Announcement.deleteMany({}),
     PerformanceRecord.deleteMany({}),
     EvaluationCycle.deleteMany({}),

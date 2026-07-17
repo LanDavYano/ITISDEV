@@ -57,7 +57,7 @@ export async function writeAuditLog(opts: {
   note?: string | null
 }) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { AuditLog } = require("@/database")
+  const { AuditLog, User } = require("@/database")
   await AuditLog.create({
     record: opts.record._id,
     targetUser: opts.record.user,
@@ -70,6 +70,34 @@ export async function writeAuditLog(opts: {
     changes: opts.changes ?? [],
     note: opts.note ?? null,
   })
+
+  // Mirror into the global Admin Activity Log (real-time feed).
+  try {
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    const target = await User.findById(opts.record.user).select("firstName lastName").lean()
+    const name = target ? `${target.firstName} ${target.lastName}` : "a member"
+    const period = `${opts.record.periodMonth} ${opts.record.periodYear}`
+    const description =
+      opts.action === "edit"
+        ? `Edited the performance record of ${name} (${period})`
+        : opts.action === "assign"
+          ? `Updated assigned counts / VP rating for ${name} (${period})`
+          : opts.action === "flag"
+            ? `Flagged the submission of ${name} (${period})${opts.note ? ` — “${opts.note}”` : ""}`
+            : `Removed the flag on ${name}'s submission (${period})`
+    await logAdminActivity({
+      actor: opts.actor,
+      category: "Performance Records",
+      action: opts.action,
+      description,
+      targetType: "PerformanceRecord",
+      targetId: String(opts.record._id),
+      targetLabel: name,
+      changes: opts.changes,
+    })
+  } catch {
+    /* the global feed must never break the primary action */
+  }
 }
 
 /** Validate the member-submitted portion of the form. Returns an error string or null. */

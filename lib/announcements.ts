@@ -53,4 +53,23 @@ export async function writeAnnouncementLog(opts: {
     actorName: opts.actor.name ?? "Unknown",
     actorRole: opts.actor.role ?? null,
   })
+
+  // Mirror into the global Admin Activity Log (real-time feed).
+  try {
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    const verb =
+      opts.action === "create" ? "Published" : opts.action === "edit" ? "Edited" : "Deleted"
+    await logAdminActivity({
+      actor: opts.actor,
+      category: "Announcements",
+      action: opts.action,
+      description: `${verb} announcement “${opts.announcement.title}”`,
+      targetType: "Announcement",
+      targetId: String(opts.announcement._id),
+      targetLabel: opts.announcement.title,
+      changes: opts.changes,
+    })
+  } catch {
+    /* the global feed must never break the primary action */
+  }
 }

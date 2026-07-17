@@ -97,6 +97,17 @@ export async function POST(req: NextRequest) {
       { new: true, runValidators: true }
     ).lean()
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Department Management",
+      action: "create",
+      description: `Created department “${name}” (${officeType})`,
+      targetType: "Department",
+      targetId: created._id.toString(),
+      targetLabel: name,
+    })
+
     return NextResponse.json(
       {
         message: "Department created",
