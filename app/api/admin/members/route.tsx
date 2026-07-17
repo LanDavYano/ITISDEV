@@ -103,6 +103,17 @@ export async function POST(req: NextRequest) {
       subDepartment: resolvedSubDepartment,
     });
 
+    const { logAdminActivity } = await import("@/lib/activity-log");
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Member Management",
+      action: "create",
+      description: `Added member ${firstName} ${lastName} (${email})`,
+      targetType: "User",
+      targetId: newUser._id.toString(),
+      targetLabel: `${firstName} ${lastName}`,
+    });
+
     return NextResponse.json(
       { message: "Member created", id: newUser._id.toString() },
       { status: 201 }

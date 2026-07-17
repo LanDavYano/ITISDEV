@@ -125,6 +125,17 @@ export async function PATCH(
 
     if (!updated) return NextResponse.json({ error: "Member not found" }, { status: 404 });
 
+    const { logAdminActivity } = await import("@/lib/activity-log");
+    await logAdminActivity({
+      actor: { id: session!.user.id, name: session!.user.name, role: session!.user.role },
+      category: "Member Management",
+      action: "edit",
+      description: `Updated member ${updated.firstName} ${updated.lastName} (${Object.keys(update).join(", ")})`,
+      targetType: "User",
+      targetId: params.id,
+      targetLabel: `${updated.firstName} ${updated.lastName}`,
+    });
+
     return NextResponse.json({ message: "Member updated", member: updated });
   } catch (err: any) {
     console.error("[PATCH /api/admin/members/[id]]", err);
@@ -151,6 +162,17 @@ export async function DELETE(
 
     const deleted = await User.findByIdAndDelete(params.id).lean();
     if (!deleted) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+    const { logAdminActivity } = await import("@/lib/activity-log");
+    await logAdminActivity({
+      actor: { id: session!.user.id, name: session!.user.name, role: session!.user.role },
+      category: "Member Management",
+      action: "delete",
+      description: `Removed member ${deleted.firstName} ${deleted.lastName} (${deleted.email})`,
+      targetType: "User",
+      targetId: params.id,
+      targetLabel: `${deleted.firstName} ${deleted.lastName}`,
+    });
 
     return NextResponse.json({ message: "Member removed" });
   } catch (err) {

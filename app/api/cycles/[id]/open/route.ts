@@ -62,6 +62,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     cycle.closedBy = null
     await cycle.save()
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Deadline Management",
+      action: "open",
+      description: `Reopened the ${cycle.periodMonth} ${cycle.periodYear} evaluation cycle`,
+      targetType: "EvaluationCycle",
+      targetId: cycle._id.toString(),
+      targetLabel: `${cycle.periodMonth} ${cycle.periodYear}`,
+    })
+
     return NextResponse.json({ ...cycle.toObject(), isOpen: true })
   } catch {
     return NextResponse.json({ error: "Failed to open cycle" }, { status: 500 })

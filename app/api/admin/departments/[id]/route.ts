@@ -73,6 +73,17 @@ export async function PATCH(
 
     if (!updated) return NextResponse.json({ error: "Department not found" }, { status: 404 })
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session!.user.id, name: session!.user.name, role: session!.user.role },
+      category: "Department Management",
+      action: "edit",
+      description: `Updated department “${(updated as any).name}”`,
+      targetType: "Department",
+      targetId: params.id,
+      targetLabel: (updated as any).name,
+    })
+
     return NextResponse.json({ message: "Department updated", department: updated })
   } catch (err: any) {
     if (err.code === 11000) {
@@ -122,6 +133,17 @@ export async function DELETE(
     )
 
     await Department.findByIdAndDelete(params.id)
+
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session!.user.id, name: session!.user.name, role: session!.user.role },
+      category: "Department Management",
+      action: "delete",
+      description: `Removed department “${(dept as any).name}” (${affectedUserIds.length} member(s) reassigned, ${subDepartmentIds.length} sub-department(s) removed)`,
+      targetType: "Department",
+      targetId: params.id,
+      targetLabel: (dept as any).name,
+    })
 
     return NextResponse.json({
       message: "Department removed",

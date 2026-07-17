@@ -95,6 +95,17 @@ export async function POST(req: NextRequest) {
       { new: true, upsert: true, runValidators: true }
     )
 
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: (session.user as any).role },
+      category: "KPI Configuration",
+      action: "edit",
+      description: `Updated the KPI configuration for ${periodMonth} ${periodYear} (${kpis.map((k) => `${k.name} ${k.weight}%`).join(", ")})`,
+      targetType: "KpiConfig",
+      targetId: config._id.toString(),
+      targetLabel: `${periodMonth} ${periodYear}`,
+    })
+
     return NextResponse.json({ kpis: config.kpis, periodMonth, periodYear }, { status: 200 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to save KPI config" }, { status: 500 })
