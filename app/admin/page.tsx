@@ -181,6 +181,9 @@ const STYLES = `
 .table-body { display:flex; flex-direction:column; }
 .table-row-6 { display:grid; grid-template-columns:2fr 1.5fr 1fr 1.5fr 1.5fr 1fr; gap:15px; align-items:center; padding:16px 0; border-bottom:1px solid var(--secondary-bg); transition:opacity 0.3s; }
 .table-row-6:last-child { border-bottom:none; padding-bottom:0; }
+.table-grid-header-7 { display:grid; grid-template-columns:2fr 1.3fr 1fr 1.2fr 1fr 1fr 1fr; gap:15px; padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:600; color:var(--text-sub); text-transform:uppercase; letter-spacing:0.5px; }
+.table-row-7 { display:grid; grid-template-columns:2fr 1.3fr 1fr 1.2fr 1fr 1fr 1fr; gap:15px; align-items:center; padding:16px 0; border-bottom:1px solid var(--secondary-bg); transition:opacity 0.3s; }
+.table-row-7:last-child { border-bottom:none; padding-bottom:0; }
 .table-cell { font-size:14px; font-weight:500; min-width:0; }
 .member-subtext { font-size:12px; color:var(--text-sub); font-weight:400; margin-top:2px; }
 .member { display:flex; align-items:center; gap:12px; }
@@ -344,7 +347,36 @@ function VpRatingEditor({
   );
 }
 
-// ─── KPI Breakdown Modal ────────────────────────────────────────────────────
+// ─── Grade Cell (department / sub-department standing) ─────────────────────
+
+interface GradeSummary {
+  avg: number | null; // average finalScore across members with a computed score
+  scoredCount: number; // how many members actually have a score
+  totalCount: number; // how many members belong to this dept/sub-dept
+}
+
+function GradeCell({ grade }: { grade: GradeSummary | undefined }) {
+  if (!grade || grade.totalCount === 0) {
+    return <span style={{ color: "#ccc", fontSize: 13 }}>No members</span>;
+  }
+  if (grade.avg === null) {
+    return <span style={{ color: "#999", fontSize: 13 }}>No data yet</span>;
+  }
+
+  const colorVar =
+    grade.avg >= 70 ? "var(--success-green)" : grade.avg >= 40 ? "var(--warning-yellow)" : "var(--danger-red)";
+
+  return (
+    <div>
+      <span style={{ fontWeight: 700, color: colorVar, fontSize: 14 }}>{grade.avg}%</span>
+      <div className="member-subtext">
+        {grade.scoredCount} of {grade.totalCount} scored
+      </div>
+    </div>
+  );
+}
+
+
 
 function KpiBreakdownModal({
   memberName,
@@ -1622,6 +1654,42 @@ export default function AdminPage() {
     );
   }, [members, search]);
 
+  // Each department's / sub-department's "current standing grade" is the
+  // average of its members' computed finalScore (the same server-computed
+  // score shown on the Member Management tab) — not a separately stored
+  // value, so it always stays in sync with individual member scores.
+  const departmentGrades = useMemo(() => {
+    const map: Record<string, GradeSummary> = {};
+    for (const dept of departments) {
+      const deptMembers = members.filter((m) => m.department?._id === dept._id);
+      const scores = deptMembers
+        .map((m) => performanceMap[m._id]?.finalScore)
+        .filter((s): s is number => s !== null && s !== undefined);
+      map[dept._id] = {
+        avg: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+        scoredCount: scores.length,
+        totalCount: deptMembers.length,
+      };
+    }
+    return map;
+  }, [departments, members, performanceMap]);
+
+  const subDepartmentGrades = useMemo(() => {
+    const map: Record<string, GradeSummary> = {};
+    for (const sub of subDepartments) {
+      const subMembers = members.filter((m) => m.subDepartment?._id === sub._id);
+      const scores = subMembers
+        .map((m) => performanceMap[m._id]?.finalScore)
+        .filter((s): s is number => s !== null && s !== undefined);
+      map[sub._id] = {
+        avg: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+        scoredCount: scores.length,
+        totalCount: subMembers.length,
+      };
+    }
+    return map;
+  }, [subDepartments, members, performanceMap]);
+
   const todayLabel = useMemo(
     () => new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" }),
     []
@@ -2436,22 +2504,24 @@ export default function AdminPage() {
                       </span>
                     </h2>
                   </div>
-                  <div className="table-grid-header">
+                  <div className="table-grid-header-7">
                     <div>Name</div>
                     <div>Office Type</div>
                     <div>Leader</div>
                     <div>Description</div>
                     <div>Members</div>
+                    <div>Grade</div>
                     <div>Actions</div>
                   </div>
                   <div className="table-body">
                     {loadingDepartments ? (
                       [1, 2].map((i) => (
-                        <div className="table-row-6" key={i}>
+                        <div className="table-row-7" key={i}>
                           <div className="loading-shimmer" style={{ width: "80%" }} />
                           <div className="loading-shimmer" style={{ width: "60%" }} />
                           <div className="loading-shimmer" style={{ width: "50%" }} />
                           <div className="loading-shimmer" style={{ width: "70%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
                           <div className="loading-shimmer" style={{ width: "40%" }} />
                           <div className="loading-shimmer" style={{ width: "40%" }} />
                         </div>
@@ -2462,7 +2532,7 @@ export default function AdminPage() {
                       </div>
                     ) : (
                       departments.map((d) => (
-                        <div className="table-row-6" key={d._id}>
+                        <div className="table-row-7" key={d._id}>
                           <div className="table-cell">{d.name}</div>
                           <div className="table-cell">{d.officeType}</div>
                           <div className="table-cell">
@@ -2478,6 +2548,9 @@ export default function AdminPage() {
                           <div className="table-cell">
                             {d.memberCount}{d.memberCapacity != null ? ` / ${d.memberCapacity}` : ""}
                             <div className="member-subtext">{d.subDepartmentCount} sub-department(s)</div>
+                          </div>
+                          <div className="table-cell">
+                            <GradeCell grade={departmentGrades[d._id]} />
                           </div>
                           <div className="table-cell row-actions">
                             <button
@@ -2508,22 +2581,24 @@ export default function AdminPage() {
                       </span>
                     </h2>
                   </div>
-                  <div className="table-grid-header">
+                  <div className="table-grid-header-7">
                     <div>Name</div>
                     <div>Parent Department</div>
                     <div>Leader</div>
                     <div>Description</div>
                     <div>Members</div>
+                    <div>Grade</div>
                     <div>Actions</div>
                   </div>
                   <div className="table-body">
                     {loadingSubDepartments ? (
                       [1, 2].map((i) => (
-                        <div className="table-row-6" key={i}>
+                        <div className="table-row-7" key={i}>
                           <div className="loading-shimmer" style={{ width: "80%" }} />
                           <div className="loading-shimmer" style={{ width: "60%" }} />
                           <div className="loading-shimmer" style={{ width: "50%" }} />
                           <div className="loading-shimmer" style={{ width: "70%" }} />
+                          <div className="loading-shimmer" style={{ width: "40%" }} />
                           <div className="loading-shimmer" style={{ width: "40%" }} />
                           <div className="loading-shimmer" style={{ width: "40%" }} />
                         </div>
@@ -2534,7 +2609,7 @@ export default function AdminPage() {
                       </div>
                     ) : (
                       subDepartments.map((s) => (
-                        <div className="table-row-6" key={s._id}>
+                        <div className="table-row-7" key={s._id}>
                           <div className="table-cell">{s.name}</div>
                           <div className="table-cell">{s.department?.name ?? "—"}</div>
                           <div className="table-cell">
@@ -2549,6 +2624,9 @@ export default function AdminPage() {
                           </div>
                           <div className="table-cell">
                             {s.memberCount}{s.memberCapacity != null ? ` / ${s.memberCapacity}` : ""}
+                          </div>
+                          <div className="table-cell">
+                            <GradeCell grade={subDepartmentGrades[s._id]} />
                           </div>
                           <div className="table-cell row-actions">
                             <button
