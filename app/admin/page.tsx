@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { voluntaryLogout } from "@/lib/logout";
 import AnnouncementsModal from "@/components/announcements-modal";
+import AdminBulkImport from "@/components/admin-bulk-import";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1199,7 +1200,7 @@ function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline" | "activity";
+type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline" | "activity" | "data-import";
 
 interface ActivityLogItem {
   _id: string;
@@ -1566,7 +1567,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements" || tab === "deadline" || tab === "activity") {
+    if (tab === "dashboard" || tab === "members" || tab === "kpi" || tab === "departments" || tab === "announcements" || tab === "deadline" || tab === "activity" || tab === "data-import") {
       setActiveTab(tab as AdminTab);
     }
   }, [searchParams]);
@@ -1849,6 +1850,15 @@ export default function AdminPage() {
               >
                 Team Records
               </li>
+              <li
+                className={`menu-item${activeTab === "data-import" ? " active" : ""}`}
+                onClick={() => {
+                  setActiveTab("data-import")
+                  router.replace("/admin?tab=data-import")
+                }}
+              >
+                Data Import
+              </li>
             </ul>
           </div>
           <div>
@@ -1904,6 +1914,8 @@ export default function AdminPage() {
                             ? "Deadline Management."
                             : activeTab === "activity"
                               ? "Admin Activity Log."
+                              : activeTab === "data-import"
+                                ? "Data Import."
                               : "System Announcements."}
                 </h1>
               </div>
@@ -2887,6 +2899,9 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+
+            {/* ── Data Import tab ── */}
+            {activeTab === "data-import" && <AdminBulkImport />}
           </div>
         </main>
       </div>
