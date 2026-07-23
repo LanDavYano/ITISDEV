@@ -67,14 +67,14 @@ export default function AnnouncementsModal() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between border-b border-gray-100" style={{ padding: "20px 28px" }}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-              <Megaphone className="w-4.5 h-4.5 w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+              <Megaphone className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <h2 className="font-bold text-base leading-tight">System Announcements</h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500" style={{ marginTop: 2 }}>
                 {announcements.length} active announcement{announcements.length === 1 ? "" : "s"} from the PM team
               </p>
             </div>
@@ -89,12 +89,15 @@ export default function AnnouncementsModal() {
         </div>
 
         {/* Announcement list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4" style={{ padding: "24px 28px" }}>
           {announcements.map((a) => (
-            <div key={a._id} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-              <h3 className="font-semibold text-sm mb-1">{a.title}</h3>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{a.content}</p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[11px] text-gray-500">
+            <div key={a._id} className="rounded-xl border border-gray-200 bg-gray-50" style={{ padding: 24 }}>
+              <h3 className="font-semibold text-sm" style={{ marginBottom: 10 }}>{a.title}</h3>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{a.content}</p>
+              <div
+                className="flex flex-wrap items-center text-gray-400 border-t border-gray-200"
+                style={{ marginTop: 16, paddingTop: 14, gap: "4px 16px", fontSize: 11 }}
+              >
                 <span>
                   Posted{" "}
                   {new Date(a.postedAt).toLocaleDateString("en-US", {
@@ -121,10 +124,11 @@ export default function AnnouncementsModal() {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100">
+        <div className="border-t border-gray-100" style={{ padding: "20px 28px" }}>
           <button
             onClick={dismiss}
-            className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 transition-colors"
+            className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors"
+            style={{ paddingTop: 12, paddingBottom: 12 }}
           >
             Got it, continue
           </button>
