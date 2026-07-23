@@ -68,6 +68,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '/images/default-avatar.png',
     },
+
+    // ── Probation ────────────────────────────────────────────────────────────
+    // Probation does NOT change the role level (access control stays intact).
+    // The dashboard and admin UI show "PROBATIONARY MEMBER" when this is true.
+    isProbationary: { type: Boolean, default: false },
+    probationReason: { type: String, trim: true, maxlength: 1000, default: null },
+    probationStartedAt: { type: Date, default: null },
+    probationStartedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   { timestamps: true } // created_at / updated_at
 )
