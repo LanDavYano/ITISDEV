@@ -1201,6 +1201,61 @@ function AnnouncementModal({ mode, announcement, onClose, onSaved, showToast }: 
   );
 }
 
+// ─── ProbationReasonModal ──────────────────────────────────────────────────────
+
+interface ProbationReasonModalProps {
+  member: PopulatedMember;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void> | void;
+  showToast: (msg: string, type: "success" | "error") => void;
+}
+
+function ProbationReasonModal({ member, onClose, onSubmit, showToast }: ProbationReasonModalProps) {
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!reason.trim()) {
+      showToast("A reason is required to set probation.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSubmit(reason.trim());
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">
+          Place {member.firstName} {member.lastName} on Probation
+        </div>
+        <div className="form-field">
+          <label>Reason</label>
+          <textarea
+            value={reason}
+            maxLength={2000}
+            rows={4}
+            autoFocus
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Explain why this member is being placed on probation…"
+          />
+        </div>
+        <div className="modal-actions">
+          <button className="btn-action secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-action primary" onClick={handleConfirm} disabled={saving}>
+            {saving ? "Saving…" : "Confirm Probation"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type AdminTab = "dashboard" | "members" | "kpi" | "departments" | "announcements" | "deadline" | "activity";
@@ -1237,6 +1292,7 @@ export default function AdminPage() {
   const [currentCycle, setCurrentCycle]     = useState<Cycle | null>(null);
   const [performanceMap, setPerformanceMap] = useState<Record<string, PerfSummary>>({});
   const [breakdownMember, setBreakdownMember] = useState<{ id: string; name: string } | null>(null);
+  const [probationTarget, setProbationTarget] = useState<PopulatedMember | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingStats, setLoadingStats]     = useState(true);
   const [removingId, setRemovingId]         = useState<string | null>(null);
@@ -1611,21 +1667,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleToggleProbation = async (m: PopulatedMember) => {
-    const action = m.isProbationary ? "clear" : "set";
-    let reason = "";
-    if (action === "set") {
-      const input = window.prompt(`Enter reason for placing ${m.firstName} ${m.lastName} on probation:`);
-      if (input === null) return; // user cancelled
-      if (!input.trim()) {
-        showToast("A reason is required to set probation.", "error");
-        return;
-      }
-      reason = input.trim();
-    } else {
-      if (!window.confirm(`Are you sure you want to clear probation for ${m.firstName} ${m.lastName}?`)) return;
-    }
-
+  const submitProbation = async (m: PopulatedMember, action: "set" | "clear", reason: string) => {
     try {
       const res = await fetch(`/api/admin/members/${m._id}/probation`, {
         method: "POST",
@@ -1638,6 +1680,15 @@ export default function AdminPage() {
       fetchMembers();
     } catch (err: unknown) {
       showToast((err as Error).message, "error");
+    }
+  };
+
+  const handleToggleProbation = async (m: PopulatedMember) => {
+    if (m.isProbationary) {
+      if (!window.confirm(`Are you sure you want to clear probation for ${m.firstName} ${m.lastName}?`)) return;
+      await submitProbation(m, "clear", "");
+    } else {
+      setProbationTarget(m);
     }
   };
 
@@ -1783,6 +1834,14 @@ export default function AdminPage() {
           onClose={() => setBreakdownMember(null)}
           canRateVp={canRateVp(members.find((m) => m._id === breakdownMember.id))}
           onSaveVpRating={(score) => handleSaveVpRating(breakdownMember.id, score)}
+        />
+      )}
+      {probationTarget && (
+        <ProbationReasonModal
+          member={probationTarget}
+          onClose={() => setProbationTarget(null)}
+          onSubmit={(reason) => submitProbation(probationTarget, "set", reason)}
+          showToast={showToast}
         />
       )}
       {showDeptModal && (
