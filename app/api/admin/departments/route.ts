@@ -1,4 +1,11 @@
-import { NextResponse } from "next/server"
+/**
+ * /api/admin/departments
+ *
+ * GET  — list all departments, enriched with member/sub-department counts
+ * POST — create a new department (admin only, roleLevel >= 3)
+ */
+
+import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
@@ -8,11 +15,111 @@ export async function GET() {
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, Department } = require("@/database")
+    const { connectDB, Department, User, SubDepartment } = require("@/database")
     await connectDB()
+
     const departments = await Department.find().sort({ name: 1 }).lean()
-    return NextResponse.json({ departments })
+    const leaderRole = await require("@/database").Role.findOne({ level: 3 }).select("_id").lean()
+
+    const enriched = await Promise.all(
+      departments.map(async (dept: any) => {
+        const resolvedLeader = leaderRole
+          ? await User.findOne({ role: leaderRole._id, department: dept._id })
+              .select("_id firstName lastName")
+              .lean()
+          : null
+
+        await Department.findByIdAndUpdate(dept._id, {
+          $set: { deptLeader: resolvedLeader?._id ?? null },
+        })
+
+        const [memberCount, subDepartmentCount] = await Promise.all([
+          User.countDocuments({ department: dept._id }),
+          SubDepartment.countDocuments({ department: dept._id }),
+        ])
+
+        return {
+          ...dept,
+          deptLeader: resolvedLeader
+            ? { _id: resolvedLeader._id, firstName: resolvedLeader.firstName, lastName: resolvedLeader.lastName }
+            : null,
+          memberCount,
+          subDepartmentCount,
+        }
+      })
+    )
+
+    return NextResponse.json({ departments: enriched })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if ((session.user as any).roleLevel < 3) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const { name, officeType, description, memberCapacity, deptLeader } = body
+
+    if (!name || !officeType) {
+      return NextResponse.json({ error: "Name and office type are required" }, { status: 400 })
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { connectDB, Department } = require("@/database")
+    await connectDB()
+
+    const { User, Role } = require("@/database")
+
+    const created = await Department.create({
+      name,
+      officeType,
+      description: description ?? "",
+      memberCapacity: memberCapacity === "" || memberCapacity == null ? null : Number(memberCapacity),
+      deptLeader: null,
+    })
+
+    const leaderRole = await Role.findOne({ level: 3 }).select("_id").lean()
+    const resolvedLeader = leaderRole
+      ? await User.findOne({ role: leaderRole._id, department: created._id })
+          .select("_id")
+          .lean()
+      : null
+
+    const updated = await Department.findByIdAndUpdate(
+      created._id,
+      { $set: { deptLeader: resolvedLeader?._id ?? null } },
+      { new: true, runValidators: true }
+    ).lean()
+
+    const { logAdminActivity } = await import("@/lib/activity-log")
+    await logAdminActivity({
+      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
+      category: "Department Management",
+      action: "create",
+      description: `Created department “${name}” (${officeType})`,
+      targetType: "Department",
+      targetId: created._id.toString(),
+      targetLabel: name,
+    })
+
+    return NextResponse.json(
+      {
+        message: "Department created",
+        id: created._id.toString(),
+        department: updated,
+      },
+      { status: 201 }
+    )
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return NextResponse.json({ error: "A department with this name already exists" }, { status: 409 })
+    }
+    return NextResponse.json({ error: err.message ?? "Internal server error" }, { status: 500 })
   }
 }
