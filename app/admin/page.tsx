@@ -1956,6 +1956,14 @@ export default function AdminPage() {
               >
                 Team Records
               </li>
+              {isAdmin && (
+                <li
+                  className="menu-item"
+                  onClick={() => router.push("/admin/reports")}
+                >
+                  Performance Report
+                </li>
+              )}
               <li
                 className={`menu-item${activeTab === "data-import" ? " active" : ""}`}
                 onClick={() => {

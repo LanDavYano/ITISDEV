@@ -14,7 +14,7 @@ interface Project {
 
 // Pages that render without the dashboard chrome (sidebar/header) — they
 // bring their own layout. Matched exactly, or by prefix for nested routes.
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/register/admin", "/forgot-password", "/dashboard", "/admin", "/admin/deadline"]
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/register/admin", "/forgot-password", "/dashboard", "/admin", "/admin/deadline", "/admin/reports"]
 const PUBLIC_PREFIXES = ["/admin/submissions", "/performance", "/team"]
 
 export default function ClientLayout({
