@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { validateKpiConfig, type KpiConfig as KpiConfigShape } from "@/lib/scoring"
+import { getCurrentCycle } from "@/lib/performance"
 
 const VALID_SOURCES = ["rating", "attendance", "deliverables", "timeliness", "manual"]
 const VALID_POLICIES = ["exclude", "flag", "default"]
@@ -27,12 +28,6 @@ function normalizeKpis(input: unknown): KpiConfigShape[] | null {
   if (errors.length > 0) return null
 
   return normalized
-}
-
-async function getCurrentCycle() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { EvaluationCycle } = require("@/database")
-  return EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
 }
 
 export async function GET() {

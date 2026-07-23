@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { calculateFinalScore, type PerfInputs } from "@/lib/scoring"
+import { getCurrentCycle } from "@/lib/performance"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -9,7 +10,7 @@ export async function GET() {
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, EvaluationCycle } = require("@/database")
+    const { connectDB } = require("@/database")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const PerformanceRecord = require("@/database/PerformanceRecord")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -17,7 +18,7 @@ export async function GET() {
 
     await connectDB()
 
-    const cycle = await EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
+    const cycle = await getCurrentCycle()
     const periodMonth = cycle?.periodMonth ?? new Date().toLocaleString("en-US", { month: "long" })
     const periodYear = cycle?.periodYear ?? new Date().getFullYear()
 

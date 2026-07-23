@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { calculateFinalScore, type PerfInputs } from "@/lib/scoring";
+import { getCurrentCycle } from "@/lib/performance";
 
 export async function GET() {
   try {
@@ -20,7 +21,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { connectDB, User, PerformanceRecord, Department, EvaluationCycle } = require("@/database");
+    const { connectDB, User, PerformanceRecord, Department } = require("@/database");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const KpiConfig = require("@/database/KpiConfig");
     await connectDB();
@@ -29,7 +30,7 @@ export async function GET() {
     // same source of truth the other two performance routes use, rather
     // than deriving it from today's date (those can disagree near a
     // period boundary).
-    const cycle = await EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 });
+    const cycle = await getCurrentCycle();
     const now = new Date();
     const months = [
       "January", "February", "March", "April", "May", "June",

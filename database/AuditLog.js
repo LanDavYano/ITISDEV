@@ -1,9 +1,11 @@
 /**
- * AuditLog model — traceability for modifications to submitted performance data.
+ * AuditLog model — traceability for modifications to submitted performance data
+ * and member probation actions.
  *
- * One document per admin edit, flag/unflag, or team-leader assignment on a
- * PerformanceRecord: who made the change (actor), what changed (field-level
- * before/after), and when (createdAt via timestamps).
+ * One document per admin edit, flag/unflag, team-leader assignment on a
+ * PerformanceRecord, or probation set/clear on a User. The `record`,
+ * `periodMonth`, and `periodYear` fields are optional for probation events
+ * that are not tied to a specific PerformanceRecord.
  */
 
 const { mongoose } = require("./db")
@@ -19,21 +21,23 @@ const changeSchema = new mongoose.Schema(
 
 const auditLogSchema = new mongoose.Schema(
   {
+    // null for probation events not tied to a specific PerformanceRecord.
     record: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PerformanceRecord",
-      required: true,
+      required: false,
+      default: null,
       index: true,
     },
-    // Whose submission was modified (denormalized so logs survive record deletion).
+    // Whose record/profile was modified (denormalized so logs survive deletion).
     targetUser: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
     },
-    periodMonth: { type: String, required: true },
-    periodYear: { type: Number, required: true },
+    periodMonth: { type: String, required: false, default: null },
+    periodYear: { type: Number, required: false, default: null },
 
     // Who made the change.
     actor: {
@@ -47,7 +51,7 @@ const auditLogSchema = new mongoose.Schema(
     action: {
       type: String,
       required: true,
-      enum: ["edit", "flag", "unflag", "assign"],
+      enum: ["edit", "flag", "unflag", "assign", "probation_set", "probation_cleared"],
     },
     changes: { type: [changeSchema], default: [] },
     note: { type: String, trim: true, maxlength: 1000, default: null }, // e.g. flag reason

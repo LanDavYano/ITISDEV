@@ -34,7 +34,8 @@ function canExtendCycle(cycle: any) {
   return now <= deadline + MS_3_DAYS
 }
 
-// Returns the most recently created cycle (open or closed) — APMP-59
+// Returns the most recently created open cycle, or the most recently created
+// cycle overall if none are open — see getCurrentCycle() in lib/performance.ts
 export async function GET() {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -60,9 +61,22 @@ export async function GET() {
       }
     )
 
-    const cycle = await EvaluationCycle.findOne()
+    // Prefer the most recently created cycle that's still open; a newer
+    // cycle that's been closed/archived (e.g. a test cycle) must never
+    // shadow an older cycle that's still open for submission. Only fall
+    // back to "most recent regardless of state" when none are open, so
+    // admins retain the 3-day window to extend a cycle that just closed.
+    const openCycle = await EvaluationCycle.findOne({
+      isArchived: false,
+      isManuallyClosed: false,
+      submissionDeadline: { $gte: now },
+    })
       .sort({ createdAt: -1, updatedAt: -1 })
       .lean()
+
+    const cycle =
+      openCycle ??
+      (await EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 }).lean())
 
     if (!cycle) return NextResponse.json(null)
 

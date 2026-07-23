@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Bell, X, CheckCheck, CalendarClock, AlertTriangle, Lock, Info } from "lucide-react"
+import { Bell, X, CheckCheck, CalendarClock, AlertTriangle, Lock, Info, CheckCircle2 } from "lucide-react"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -15,12 +15,29 @@ interface Cycle {
   isArchived: boolean
 }
 
+// A real, persisted notification (e.g. a member telling their team leader
+// they've completed a deliverable/meeting) from GET /api/notifications.
+interface RealNotification {
+  _id: string
+  itemType: "deliverable" | "meeting"
+  itemName: string
+  periodMonth: string
+  periodYear: number
+  message: string
+  read: boolean
+  createdAt: string
+}
+
 interface AppNotification {
   id: string
-  type: "info" | "warning" | "urgent" | "locked"
+  type: "info" | "warning" | "urgent" | "locked" | "done"
   title: string
   message: string
   icon: React.ReactNode
+  // "real" notifications are read-tracked server-side (GET/PATCH /api/notifications);
+  // "cycle" ones are the synthetic, date-derived reminders below, tracked via localStorage.
+  source: "real" | "cycle"
+  read?: boolean
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -47,7 +64,7 @@ function saveDismissed(ids: Set<string>) {
   }
 }
 
-function buildNotifications(cycle: Cycle | null): AppNotification[] {
+function buildNotifications(cycle: Cycle | null): Omit<AppNotification, "source">[] {
   const now = new Date()
   const day = now.getDate()
 
@@ -79,7 +96,7 @@ function buildNotifications(cycle: Cycle | null): AppNotification[] {
     ]
   }
 
-  const notes: AppNotification[] = []
+  const notes: Omit<AppNotification, "source">[] = []
 
   // Start of month: days 1–5
   if (day >= 1 && day <= 5) {
@@ -136,6 +153,7 @@ const TYPE_STYLES: Record<AppNotification["type"], string> = {
   warning: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300",
   urgent:  "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300",
   locked:  "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400",
+  done:    "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300",
 }
 
 const BADGE_STYLES: Record<AppNotification["type"], string> = {
@@ -143,6 +161,7 @@ const BADGE_STYLES: Record<AppNotification["type"], string> = {
   warning: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
   urgent:  "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300",
   locked:  "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+  done:    "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
 }
 
 const BADGE_LABEL: Record<AppNotification["type"], string> = {
@@ -150,6 +169,7 @@ const BADGE_LABEL: Record<AppNotification["type"], string> = {
   warning: "Reminder",
   urgent:  "Urgent",
   locked:  "Locked",
+  done:    "Team",
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -158,15 +178,22 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [cycle, setCycle] = useState<Cycle | null | undefined>(undefined) // undefined = loading
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [realNotifications, setRealNotifications] = useState<RealNotification[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Fetch current cycle once on mount
+  // Fetch current cycle + real (persisted) notifications once on mount
   useEffect(() => {
     setDismissed(getDismissed())
     fetch("/api/cycles/current")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => setCycle(data))
       .catch(() => setCycle(null))
+    fetch("/api/notifications")
+      .then((r) => (r.ok ? r.json() : { notifications: [] }))
+      .then((data) => setRealNotifications(data.notifications ?? []))
+      .catch(() => {
+        /* real notifications are non-critical — fail silently */
+      })
   }, [])
 
   // Close dropdown on outside click
@@ -180,21 +207,54 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  const allNotifications = cycle !== undefined ? buildNotifications(cycle) : []
-  const unread = allNotifications.filter((n) => !dismissed.has(n.id))
+  const realAsApp: AppNotification[] = realNotifications.map((n) => ({
+    id: `real-${n._id}`,
+    type: "done",
+    title: n.itemType === "deliverable" ? "Deliverable Update" : "Meeting Update",
+    message: n.message,
+    icon: <CheckCircle2 className="w-4 h-4" />,
+    source: "real",
+    read: n.read,
+  }))
 
-  const dismissOne = (id: string) => {
+  const cycleAsApp: AppNotification[] = (cycle !== undefined ? buildNotifications(cycle) : []).map(
+    (n) => ({ ...n, source: "cycle" as const })
+  )
+
+  const allNotifications = [...realAsApp, ...cycleAsApp]
+  const isRead = (n: AppNotification) => (n.source === "real" ? !!n.read : dismissed.has(n.id))
+  const unread = allNotifications.filter((n) => !isRead(n))
+
+  const dismissOne = async (n: AppNotification) => {
+    if (n.source === "real") {
+      const realId = n.id.replace(/^real-/, "")
+      setRealNotifications((prev) => prev.map((r) => (r._id === realId ? { ...r, read: true } : r)))
+      try {
+        await fetch(`/api/notifications/${realId}`, { method: "PATCH" })
+      } catch {
+        /* best-effort — worst case it shows unread again after a refresh */
+      }
+      return
+    }
     const next = new Set(dismissed)
-    next.add(id)
+    next.add(n.id)
     setDismissed(next)
     saveDismissed(next)
   }
 
-  const dismissAll = () => {
+  const dismissAll = async () => {
     const next = new Set(dismissed)
-    allNotifications.forEach((n) => next.add(n.id))
+    cycleAsApp.forEach((n) => next.add(n.id))
     setDismissed(next)
     saveDismissed(next)
+
+    const unreadReal = realNotifications.filter((r) => !r.read)
+    if (unreadReal.length > 0) {
+      setRealNotifications((prev) => prev.map((r) => ({ ...r, read: true })))
+      await Promise.allSettled(
+        unreadReal.map((r) => fetch(`/api/notifications/${r._id}`, { method: "PATCH" }))
+      )
+    }
     setOpen(false)
   }
 
@@ -260,11 +320,11 @@ export default function NotificationBell() {
               </div>
             ) : (
               allNotifications.map((n) => {
-                const isRead = dismissed.has(n.id)
+                const read = isRead(n)
                 return (
                   <div
                     key={n.id}
-                    className={`relative flex gap-3 px-4 py-3.5 transition-all ${isRead ? "opacity-50" : ""}`}
+                    className={`relative flex gap-3 px-4 py-3.5 transition-all ${read ? "opacity-50" : ""}`}
                   >
                     {/* Icon badge */}
                     <div
@@ -291,9 +351,9 @@ export default function NotificationBell() {
                     </div>
 
                     {/* Dismiss */}
-                    {!isRead && (
+                    {!read && (
                       <button
-                        onClick={() => dismissOne(n.id)}
+                        onClick={() => dismissOne(n)}
                         className="absolute top-2.5 right-3 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-300 transition-colors"
                         aria-label="Dismiss notification"
                       >

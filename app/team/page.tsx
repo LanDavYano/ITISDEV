@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { roleHomePath } from "@/lib/roles"
+import NotificationBell from "@/components/notification-bell"
 import {
   ArrowLeft,
   AlertCircle,
@@ -15,6 +17,10 @@ import {
   Loader2,
   Lock,
   Users,
+  ListChecks,
+  Plus,
+  Trash2,
+  X,
 } from "lucide-react"
 
 interface Cycle {
@@ -22,6 +28,13 @@ interface Cycle {
   periodYear: number
   submissionDeadline: string
   isOpen: boolean
+}
+
+interface AssignedItem {
+  _id?: string
+  name: string
+  description: string
+  completed: boolean
 }
 
 interface TeamRow {
@@ -35,27 +48,15 @@ interface TeamRow {
     department?: { name: string }
   }
   record: {
-    deliverablesAssigned: number
-    deliverablesAnswered: number
-    meetingsTotal: number
-    meetingsAttended: number
+    deliverables: AssignedItem[]
+    meetings: AssignedItem[]
     submittedAt: string | null
   } | null
 }
 
-type CountsForm = {
-  deliverablesAssigned: string
-  deliverablesAnswered: string
-  meetingsTotal: string
-  meetingsAttended: string
-}
+type ItemField = "deliverables" | "meetings"
 
-const COUNT_FIELDS: { key: keyof CountsForm; label: string }[] = [
-  { key: "deliverablesAssigned", label: "Deliv. assigned" },
-  { key: "deliverablesAnswered", label: "Deliv. answered" },
-  { key: "meetingsTotal", label: "Meetings total" },
-  { key: "meetingsAttended", label: "Meetings attended" },
-]
+const emptyDraftItem = (): AssignedItem => ({ name: "", description: "", completed: false })
 
 export default function TeamRecordsPage() {
   const { data: session, status } = useSession()
@@ -64,9 +65,19 @@ export default function TeamRecordsPage() {
   const [loading, setLoading] = useState(true)
   const [cycle, setCycle] = useState<Cycle | null>(null)
   const [team, setTeam] = useState<TeamRow[]>([])
-  const [forms, setForms] = useState<Record<string, CountsForm>>({})
-  const [savingId, setSavingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // Manage modal state
+  const [managing, setManaging] = useState<TeamRow["member"] | null>(null)
+  const [draft, setDraft] = useState<{ deliverables: AssignedItem[]; meetings: AssignedItem[] }>({
+    deliverables: [],
+    meetings: [],
+  })
+  const [newItem, setNewItem] = useState<Record<ItemField, AssignedItem>>({
+    deliverables: emptyDraftItem(),
+    meetings: emptyDraftItem(),
+  })
+  const [saving, setSaving] = useState(false)
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
@@ -81,16 +92,6 @@ export default function TeamRecordsPage() {
       if (res.ok) {
         setCycle(data.cycle)
         setTeam(data.team ?? [])
-        const initial: Record<string, CountsForm> = {}
-        for (const row of data.team ?? []) {
-          initial[row.member._id] = {
-            deliverablesAssigned: (row.record?.deliverablesAssigned ?? 0).toString(),
-            deliverablesAnswered: (row.record?.deliverablesAnswered ?? 0).toString(),
-            meetingsTotal: (row.record?.meetingsTotal ?? 0).toString(),
-            meetingsAttended: (row.record?.meetingsAttended ?? 0).toString(),
-          }
-        }
-        setForms(initial)
       }
     } finally {
       setLoading(false)
@@ -108,55 +109,72 @@ export default function TeamRecordsPage() {
     }
   }, [status, session, router, load])
 
-  const updateField = (memberId: string, key: keyof CountsForm, value: string) =>
-    setForms((prev) => ({
-      ...prev,
-      [memberId]: { ...prev[memberId], [key]: value },
-    }))
-
-  const validateRow = (form: CountsForm): string | null => {
-    for (const { key, label } of COUNT_FIELDS) {
-      const num = Number(form[key])
-      if (form[key] === "" || !Number.isInteger(num) || num < 0)
-        return `${label} must be a whole number of 0 or more.`
-    }
-    if (Number(form.deliverablesAnswered) > Number(form.deliverablesAssigned))
-      return "Deliverables answered cannot exceed deliverables assigned."
-    if (Number(form.meetingsAttended) > Number(form.meetingsTotal))
-      return "Meetings attended cannot exceed total meetings."
-    return null
+  const openManage = (member: TeamRow["member"], record: TeamRow["record"]) => {
+    setManaging(member)
+    setDraft({
+      deliverables: (record?.deliverables ?? []).map((d) => ({ ...d })),
+      meetings: (record?.meetings ?? []).map((m) => ({ ...m })),
+    })
+    setNewItem({ deliverables: emptyDraftItem(), meetings: emptyDraftItem() })
   }
 
-  const handleSave = async (memberId: string, name: string) => {
-    const form = forms[memberId]
-    const clientError = validateRow(form)
-    if (clientError) {
-      showToast(clientError, false)
+  const closeManage = () => {
+    setManaging(null)
+  }
+
+  const addItem = (field: ItemField) => {
+    const item = newItem[field]
+    if (!item.name.trim()) {
+      showToast("Give it a name first.", false)
+      return
+    }
+    setDraft((prev) => ({ ...prev, [field]: [...prev[field], { ...item, name: item.name.trim() }] }))
+    setNewItem((prev) => ({ ...prev, [field]: emptyDraftItem() }))
+  }
+
+  const updateItem = (field: ItemField, index: number, patch: Partial<AssignedItem>) => {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: prev[field].map((it, i) => (i === index ? { ...it, ...patch } : it)),
+    }))
+  }
+
+  const removeItem = (field: ItemField, index: number) => {
+    setDraft((prev) => ({ ...prev, [field]: prev[field].filter((_, i) => i !== index) }))
+  }
+
+  const handleSave = async () => {
+    if (!managing) return
+    if (draft.deliverables.some((d) => !d.name.trim()) || draft.meetings.some((m) => !m.name.trim())) {
+      showToast("Every deliverable/meeting needs a name.", false)
       return
     }
 
-    setSavingId(memberId)
+    setSaving(true)
     try {
-      const res = await fetch(`/api/team/records/${memberId}`, {
+      const res = await fetch(`/api/team/records/${managing._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deliverablesAssigned: Number(form.deliverablesAssigned),
-          deliverablesAnswered: Number(form.deliverablesAnswered),
-          meetingsTotal: Number(form.meetingsTotal),
-          meetingsAttended: Number(form.meetingsAttended),
-        }),
+        body: JSON.stringify({ deliverables: draft.deliverables, meetings: draft.meetings }),
       })
       const data = await res.json()
       if (!res.ok) {
-        showToast(data.error ?? "Failed to save counts.", false)
+        showToast(data.error ?? "Failed to save.", false)
         return
       }
-      showToast(`Counts saved for ${name}.`, true)
+      setTeam((prev) =>
+        prev.map((row) =>
+          row.member._id === managing._id
+            ? { ...row, record: { ...(row.record ?? { submittedAt: null }), deliverables: data.deliverables, meetings: data.meetings } }
+            : row
+        )
+      )
+      showToast(`Saved for ${managing.firstName} ${managing.lastName}.`, true)
+      closeManage()
     } catch {
       showToast("Network error. Please try again.", false)
     } finally {
-      setSavingId(null)
+      setSaving(false)
     }
   }
 
@@ -176,6 +194,98 @@ export default function TeamRecordsPage() {
     )
   }
 
+  const renderItemList = (field: ItemField, label: string) => (
+    <div>
+      <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+        <ListChecks className="w-4 h-4 text-blue-600" /> {label}
+      </h4>
+      <div className="space-y-2 mb-3">
+        {draft[field].length === 0 && (
+          <p className="text-xs text-gray-400 italic">None assigned yet.</p>
+        )}
+        {draft[field].map((item, index) => (
+          <div
+            key={item._id ?? `new-${index}`}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                value={item.name}
+                onChange={(e) => updateItem(field, index, { name: e.target.value })}
+                disabled={!cycle?.isOpen}
+                placeholder="Name"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={!cycle?.isOpen}
+                onClick={() => removeItem(field, index)}
+                className="h-9 w-9 text-rose-500 hover:text-rose-600"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+            <Textarea
+              value={item.description}
+              onChange={(e) => updateItem(field, index, { description: e.target.value })}
+              disabled={!cycle?.isOpen}
+              placeholder="Description (optional)"
+              rows={2}
+              className="resize-none text-sm"
+            />
+            <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={item.completed}
+                disabled={!cycle?.isOpen}
+                onChange={(e) => updateItem(field, index, { completed: e.target.checked })}
+                className="accent-blue-600"
+              />
+              Completed
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {cycle?.isOpen && (
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-3 space-y-2">
+          <Input
+            value={newItem[field].name}
+            onChange={(e) => setNewItem((prev) => ({ ...prev, [field]: { ...prev[field], name: e.target.value } }))}
+            placeholder={`New ${label.toLowerCase().slice(0, -1)} name`}
+          />
+          <Textarea
+            value={newItem[field].description}
+            onChange={(e) =>
+              setNewItem((prev) => ({ ...prev, [field]: { ...prev[field], description: e.target.value } }))
+            }
+            placeholder="Description (optional)"
+            rows={2}
+            className="resize-none text-sm"
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={newItem[field].completed}
+                onChange={(e) =>
+                  setNewItem((prev) => ({ ...prev, [field]: { ...prev[field], completed: e.target.checked } }))
+                }
+                className="accent-blue-600"
+              />
+              Mark completed
+            </label>
+            <Button type="button" size="sm" variant="outline" onClick={() => addItem(field)}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Add
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
       {/* Toast */}
@@ -187,6 +297,50 @@ export default function TeamRecordsPage() {
         >
           {toast.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {toast.msg}
+        </div>
+      )}
+
+      {/* Manage modal */}
+      {managing && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-lg">
+                {managing.firstName} {managing.lastName}
+              </h3>
+              <button
+                onClick={closeManage}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              {cycle?.isOpen
+                ? "Add, edit, or mark deliverables and meetings complete for this cycle."
+                : "This cycle is closed — viewing only."}
+            </p>
+
+            <div className="space-y-6">
+              {renderItemList("deliverables", "Deliverables")}
+              {renderItemList("meetings", "Meetings")}
+            </div>
+
+            {cycle?.isOpen && (
+              <div className="flex justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={closeManage} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -205,6 +359,7 @@ export default function TeamRecordsPage() {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <Link
               href="/performance"
               className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
@@ -228,8 +383,9 @@ export default function TeamRecordsPage() {
             Assign deliverables &amp; meetings
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Set each member&apos;s assigned deliverables and meeting counts for the
-            current cycle. Members see these values on their own submission page.
+            Add named deliverables and meetings for each member, and mark them complete as they
+            finish. Members see these on their own &quot;My Deliverables&quot; page and can notify
+            you once they believe something&apos;s done.
           </p>
         </div>
 
@@ -264,12 +420,12 @@ export default function TeamRecordsPage() {
             <CalendarClock className="w-8 h-8 mx-auto mb-3 text-gray-400" />
             <h2 className="font-semibold mb-1">No active evaluation cycle</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Counts can be assigned once a cycle is opened.
+              Deliverables can be assigned once a cycle is opened.
             </p>
           </div>
         )}
 
-        {/* Team table */}
+        {/* Team list */}
         {team.length === 0 ? (
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-12 text-center">
             <Users className="w-8 h-8 mx-auto mb-3 text-gray-400" />
@@ -281,15 +437,17 @@ export default function TeamRecordsPage() {
         ) : (
           <div className="space-y-4">
             {team.map(({ member, record }) => {
-              const form = forms[member._id]
-              if (!form) return null
               const isSelf = member._id === (session?.user as any)?.id
+              const deliverables = record?.deliverables ?? []
+              const meetings = record?.meetings ?? []
+              const deliverablesDone = deliverables.filter((d) => d.completed).length
+              const meetingsDone = meetings.filter((m) => m.completed).length
               return (
                 <div
                   key={member._id}
                   className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-sm">
                         {member.firstName} {member.lastName}
@@ -302,49 +460,34 @@ export default function TeamRecordsPage() {
                         {member.subDepartment?.name ? ` · ${member.subDepartment.name}` : ""}
                       </p>
                     </div>
-                    <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                        record?.submittedAt
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                          : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                      }`}
-                    >
-                      {record?.submittedAt ? "Form submitted" : "Form not submitted"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
-                    {COUNT_FIELDS.map(({ key, label }) => (
-                      <div key={key}>
-                        <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          {label}
-                        </label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={1}
-                          disabled={!cycle?.isOpen}
-                          value={form[key]}
-                          onChange={(e) => updateField(member._id, key, e.target.value)}
-                        />
-                      </div>
-                    ))}
-                    <Button
-                      size="sm"
-                      disabled={!cycle?.isOpen || savingId === member._id}
-                      onClick={() => handleSave(member._id, `${member.firstName} ${member.lastName}`)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {savingId === member._id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : !cycle?.isOpen ? (
-                        <>
-                          <Lock className="w-3.5 h-3.5 mr-1.5" /> Locked
-                        </>
-                      ) : (
-                        "Save"
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                          record?.submittedAt
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                        }`}
+                      >
+                        {record?.submittedAt ? "Form submitted" : "Form not submitted"}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {deliverablesDone}/{deliverables.length} deliverables · {meetingsDone}/
+                        {meetings.length} meetings
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() => openManage(member, record)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {!cycle?.isOpen ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5 mr-1.5" /> View
+                          </>
+                        ) : (
+                          "Manage"
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )

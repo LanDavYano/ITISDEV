@@ -11,10 +11,22 @@ export function isCycleOpen(cycle: any): boolean {
   return new Date() <= new Date(cycle.submissionDeadline)
 }
 
-/** The current cycle = most recently created one (same convention as /api/cycles/current). */
+/**
+ * The current cycle = the most recently created cycle that is still open.
+ * Falls back to the most recently created cycle overall (open or closed) only
+ * when none are open, so admins retain the 3-day window to extend a cycle
+ * that just closed. A newer cycle that's been closed/archived (e.g. a test
+ * cycle) must never shadow an older cycle that's still open for submission.
+ */
 export async function getCurrentCycle() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { EvaluationCycle } = require("@/database")
+  const openCycle = await EvaluationCycle.findOne({
+    isArchived: false,
+    isManuallyClosed: false,
+    submissionDeadline: { $gte: new Date() },
+  }).sort({ createdAt: -1, updatedAt: -1 })
+  if (openCycle) return openCycle
   return EvaluationCycle.findOne().sort({ createdAt: -1, updatedAt: -1 })
 }
 
@@ -145,6 +157,65 @@ export function validateAssignedCounts(body: any): string | null {
   if ("meetingsTotal" in body && "meetingsAttended" in body && attended > total)
     return "Meetings attended cannot exceed total meetings."
   return null
+}
+
+/** A single named+described deliverable/meeting item, as sent by the client. */
+export interface AssignedItemInput {
+  _id?: string
+  name: string
+  description?: string
+  completed?: boolean
+}
+
+/** Validate a list of assigned items. Returns an error string or null. */
+export function validateAssignedItems(items: any, label: string): string | null {
+  if (!Array.isArray(items)) return `${label} must be a list.`
+  for (const item of items) {
+    const name = typeof item?.name === "string" ? item.name.trim() : ""
+    if (!name) return `Every ${label.slice(0, -1).toLowerCase()} needs a name.`
+    if (name.length > 150) return `${label} names must be 150 characters or fewer.`
+    const description = typeof item?.description === "string" ? item.description : ""
+    if (description.length > 1000) return `${label} descriptions must be 1000 characters or fewer.`
+  }
+  return null
+}
+
+/**
+ * Merge incoming deliverable/meeting items against the record's existing
+ * ones (matched by `_id`), preserving `completedAt`/`notifiedAt` history for
+ * unchanged items and computing them fresh for newly-added or newly-completed
+ * ones. Marking an item completed clears any pending `notifiedAt` — the
+ * member's notification has been acted on.
+ */
+export function buildAssignedItems(existingItems: any[], incoming: AssignedItemInput[]) {
+  const existingById = new Map(
+    (existingItems ?? []).map((it: any) => [it._id.toString(), it])
+  )
+  const now = new Date()
+  return incoming.map((input) => {
+    const name = String(input.name ?? "").trim()
+    const description = String(input.description ?? "").trim()
+    const completed = Boolean(input.completed)
+    const existing = input._id ? existingById.get(String(input._id)) : null
+
+    if (existing) {
+      return {
+        _id: existing._id,
+        name,
+        description,
+        completed,
+        completedAt: completed ? (existing.completed ? existing.completedAt : now) : null,
+        notifiedAt: completed ? null : existing.notifiedAt,
+      }
+    }
+    return {
+      name,
+      description,
+      completed,
+      completedAt: completed ? now : null,
+      notifiedAt: null,
+    }
+  })
 }
 
 /** Derive the review status shown to admins. */

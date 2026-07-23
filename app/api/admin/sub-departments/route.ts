@@ -1,11 +1,3 @@
-/**
- * /api/admin/sub-departments
- *
- * GET  — list sub-departments (optionally filtered by ?departmentId=), enriched
- *        with member counts and populated department/leader for display
- * POST — create a new sub-department (admin only, roleLevel >= 3)
- */
-
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -19,116 +11,16 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId")
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, SubDepartment, User } = require("@/database")
+    const { connectDB, SubDepartment } = require("@/database")
     await connectDB()
 
     const query = departmentId ? { department: departmentId } : {}
-    const subDepartments = await SubDepartment.find(query).sort({ name: 1 }).lean()
-    const leaderRole = await require("@/database").Role.findOne({ level: 2 }).select("_id").lean()
+    const subDepartments = await SubDepartment.find(query)
+      .sort({ name: 1 })
+      .lean()
 
-    const enriched = await Promise.all(
-      subDepartments.map(async (sub: any) => {
-        const resolvedLeader = leaderRole
-          ? await User.findOne({ role: leaderRole._id, subDepartment: sub._id, department: sub.department })
-              .select("_id firstName lastName")
-              .lean()
-          : null
-
-        await SubDepartment.findByIdAndUpdate(sub._id, {
-          $set: { subDeptLeader: resolvedLeader?._id ?? null },
-        })
-
-        const memberCount = await User.countDocuments({ subDepartment: sub._id })
-        return {
-          ...sub,
-          department: sub.department ? { _id: sub.department, name: sub.departmentName ?? "" } : null,
-          subDeptLeader: resolvedLeader
-            ? { _id: resolvedLeader._id, firstName: resolvedLeader.firstName, lastName: resolvedLeader.lastName }
-            : null,
-          memberCount,
-        }
-      })
-    )
-
-    return NextResponse.json({ subDepartments: enriched })
+    return NextResponse.json({ subDepartments })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if ((session.user as any).roleLevel < 3) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    const body = await req.json()
-    const { name, department, description, memberCapacity, subDeptLeader } = body
-
-    if (!name || !department) {
-      return NextResponse.json({ error: "Name and department are required" }, { status: 400 })
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { connectDB, SubDepartment, Department } = require("@/database")
-    await connectDB()
-
-    const parentDept = await Department.findById(department).lean()
-    if (!parentDept) {
-      return NextResponse.json({ error: "Selected department does not exist" }, { status: 400 })
-    }
-
-    const { User, Role } = require("@/database")
-
-    const created = await SubDepartment.create({
-      name,
-      department,
-      description: description ?? "",
-      memberCapacity: memberCapacity === "" || memberCapacity == null ? null : Number(memberCapacity),
-      subDeptLeader: null,
-    })
-
-    const leaderRole = await Role.findOne({ level: 2 }).select("_id").lean()
-    const resolvedLeader = leaderRole
-      ? await User.findOne({ role: leaderRole._id, subDepartment: created._id, department })
-          .select("_id")
-          .lean()
-      : null
-
-    const updated = await SubDepartment.findByIdAndUpdate(
-      created._id,
-      { $set: { subDeptLeader: resolvedLeader?._id ?? null } },
-      { new: true, runValidators: true }
-    ).lean()
-
-    const { logAdminActivity } = await import("@/lib/activity-log")
-    await logAdminActivity({
-      actor: { id: session.user.id, name: session.user.name, role: session.user.role },
-      category: "Department Management",
-      action: "create",
-      description: `Created sub-department “${name}” under ${(parentDept as any).name}`,
-      targetType: "SubDepartment",
-      targetId: created._id.toString(),
-      targetLabel: name,
-    })
-
-    return NextResponse.json(
-      {
-        message: "Sub-department created",
-        id: created._id.toString(),
-        subDepartment: updated,
-      },
-      { status: 201 }
-    )
-  } catch (err: any) {
-    if (err.code === 11000) {
-      return NextResponse.json(
-        { error: "A sub-department with this name already exists in the department" },
-        { status: 409 }
-      )
-    }
-    return NextResponse.json({ error: err.message ?? "Internal server error" }, { status: 500 })
   }
 }

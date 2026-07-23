@@ -20,6 +20,7 @@ const AuditLog = require("./AuditLog")
 const Announcement = require("./Announcement")
 const AnnouncementLog = require("./AnnouncementLog")
 const AdminActivityLog = require("./AdminActivityLog")
+const Notification = require("./Notification")
 
 module.exports = {
   connectDB,
@@ -37,4 +38,5 @@ module.exports = {
   Announcement,
   AnnouncementLog,
   AdminActivityLog,
+  Notification,
 }
