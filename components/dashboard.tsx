@@ -224,6 +224,9 @@ const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
   const cycle     = dashData?.cycle ?? null;
   const myRecord  = dashData?.myRecord ?? null;
   const hasSubmitted = !!(myRecord?.submittedAt);
+  // A closed cycle nobody submitted to (e.g. a test cycle) isn't actionable —
+  // treat it the same as having no active cycle rather than showing it as pending.
+  const cycleIsActive = !!cycle && (cycle.isOpen || hasSubmitted);
   const daysLeft  = cycle ? daysUntil(cycle.submissionDeadline) : null;
   const isUrgent  = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
 
@@ -458,7 +461,7 @@ const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
             {/* ── Welcome ── */}
             <div className="flex items-start justify-between">
               <div>
-                {cycle ? (
+                {cycleIsActive && cycle ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                     {cycle.periodMonth} {cycle.periodYear} Evaluation Cycle
                   </p>
@@ -478,7 +481,7 @@ const Dashboard: React.FC<DashboardProps> = ({ dashData }) => {
             </div>
 
             {/* ── Deadline Alert Banner ── */}
-            {cycle && !deadlineDismissed && (
+            {cycleIsActive && cycle && !deadlineDismissed && (
               <div className={`flex items-center justify-between rounded-2xl p-5 border ${
                 hasSubmitted
                   ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50'

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { voluntaryLogout } from "@/lib/logout";
 import AnnouncementsModal from "@/components/announcements-modal";
+import NotificationBell from "@/components/notification-bell";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1875,6 +1876,7 @@ export default function AdminPage() {
               <span className="search-kbd">⌘ F</span>
             </div>
             <div className="header-actions">
+              <NotificationBell />
               <div style={{ textAlign: "right", lineHeight: 1.2, fontSize: 13, fontWeight: 500 }}>
                 <div>{session?.user?.name ?? "—"}</div>
                 <div style={{ color: "#777", fontSize: 11 }}>

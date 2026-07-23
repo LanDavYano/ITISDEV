@@ -9,8 +9,9 @@
  *   - submittedAt                            → set when the member submits the form
  *
  *  TEAM-LEADER-ASSIGNED (per member, by the leader of their sub-department):
- *   - deliverablesAssigned / deliverablesAnswered
- *   - meetingsTotal / meetingsAttended
+ *   - deliverables / meetings         → itemized {name, description, completed}
+ *   - deliverablesAssigned / deliverablesAnswered  → derived from deliverables[]
+ *   - meetingsTotal / meetingsAttended             → derived from meetings[]
  *
  *  ADMIN REVIEW (data-integrity checks before evaluation is finalized):
  *   - isFlagged / flagReason / flaggedBy / flaggedAt
@@ -64,6 +65,20 @@ const nonNegativeInt = {
   },
 }
 
+// A single named, described assignment (deliverable or meeting). `completed`
+// is team-leader-controlled only; `notifiedAt` is set when the member signals
+// (via /api/performance/notify) that they believe it's done.
+const assignedItemSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true, maxlength: 150 },
+    description: { type: String, trim: true, maxlength: 1000, default: "" },
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
+    notifiedAt: { type: Date, default: null },
+  },
+  { timestamps: true }
+)
+
 const performanceRecordSchema = new mongoose.Schema(
   {
     user: {
@@ -103,7 +118,15 @@ const performanceRecordSchema = new mongoose.Schema(
     // (a record can exist beforehand if the team leader already assigned counts).
     submittedAt: { type: Date, default: null },
 
-    // ── Team-leader-assigned counts ──────────────────────────────────────────
+    // ── Team-leader-assigned items (named + described) ──────────────────────
+    deliverables: { type: [assignedItemSchema], default: [] },
+    meetings: { type: [assignedItemSchema], default: [] },
+
+    // ── Team-leader-assigned counts — derived from deliverables/meetings
+    // above (assigned/total = item count, answered/attended = completed
+    // count) whenever those arrays are written via PATCH /api/team/records/
+    // [userId]. Kept as real fields (not virtuals) because lib/scoring.ts and
+    // /api/admin/stats read them directly. ──────────────────────────────────
     deliverablesAssigned: nonNegativeInt,
     deliverablesAnswered: nonNegativeInt,
     meetingsTotal: nonNegativeInt,

@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getCurrentCycle, isCycleOpen } from "@/lib/performance"
 
 const MS_3_DAYS = 3 * 24 * 60 * 60 * 1000
-
-function isCycleOpen(cycle: any, now: Date): boolean {
-  if (!cycle) return false
-  if (cycle.isArchived || cycle.isManuallyClosed) return false
-  return now <= new Date(cycle.submissionDeadline)
-}
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -37,9 +32,7 @@ export async function GET() {
       },
       { $set: { isArchived: true, archivedAt: now } }
     )
-    const cycle = await EvaluationCycle.findOne()
-      .sort({ periodYear: -1, submissionDeadline: -1 })
-      .lean() as any
+    const cycle = await getCurrentCycle() as any
 
     // 3. My performance record for current cycle
     let myRecord = null
@@ -102,7 +95,7 @@ export async function GET() {
             periodMonth: cycle.periodMonth,
             periodYear: cycle.periodYear,
             submissionDeadline: cycle.submissionDeadline,
-            isOpen: isCycleOpen(cycle, now),
+            isOpen: isCycleOpen(cycle),
           }
         : null,
       myRecord: myRecord
